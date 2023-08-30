@@ -4,7 +4,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using WebSocket4Net;
+using ServerSDK.Network;
+//using WebSocket4Net;
 
 namespace UWNP
 {
@@ -13,12 +14,12 @@ namespace UWNP
         Dictionary<string, Action<Package>> packAction = new Dictionary<string, Action<Package>>();
         UniTaskCompletionSource<bool> handshakeTcs;
         Dictionary<uint, UniTaskCompletionSource<Package>> packTcs = new Dictionary<uint, UniTaskCompletionSource<Package>>();
-        WebSocket socket;
+        IWebSocket socket;
         public HeartBeatServiceGameObject heartBeatServiceGo;
         public Action OnReconected;
         public Action<string> OnError;
 
-        public void SetSocket(WebSocket socket)
+        public void SetSocket(IWebSocket socket)
         {
             this.socket = socket;
         }
@@ -31,7 +32,7 @@ namespace UWNP
                 0,
                 "SystemController.handShake",
                 new HandShake() { token = token });
-            socket.Send(package, 0, package.Length);
+            socket.SendAsync(package);
             return handshakeTcs.Task;
         }
 
@@ -42,7 +43,7 @@ namespace UWNP
                 0,
                 route,
                 info);
-            socket.Send(packBuff, 0, packBuff.Length);
+            socket.SendAsync(packBuff);
         }
 
         public UniTask<Package> RequestAsync<T>(uint packID, string route, T info = default, string modelName = null)
@@ -58,7 +59,8 @@ namespace UWNP
                 modelName);
            
                 packTcs.Add(packID, pack);
-                socket.Send(packBuff, 0, packBuff.Length);
+                Debug.Log("CCCCCCCCC" + packBuff.Length);
+                socket.SendAsync(packBuff);
                 return pack.Task;
             }
         }
@@ -200,11 +202,11 @@ namespace UWNP
 
         private void OnServerTimeout()
         {
-            if (socket.State == WebSocketState.Connecting)
+            //if (socket.State == WebSocketState.Connecting)
             {
-                socket.Close();
+                socket.CloseAsync();
             }
-            if (heartBeatServiceGo != null && socket.State != WebSocketState.Connecting && socket.State != WebSocketState.Open)
+            //if (heartBeatServiceGo != null && socket.State != WebSocketState.Connecting && socket.State != WebSocketState.Open)
             {
                 heartBeatServiceGo.Stop();
             }

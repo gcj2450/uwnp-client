@@ -9,6 +9,9 @@ namespace UWNP{
     {
         public ToggleGroup toggleGroup;
         public InputField ip, port;
+
+        public Button connectBtn;
+
         public string token, version;
         private string host;
         Client client;
@@ -18,6 +21,7 @@ namespace UWNP{
         void Start()
         {
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            connectBtn.onClick.AddListener(connectBtnClick);
         }
 
         public void CreateConeccetionBtn() {
@@ -54,7 +58,7 @@ namespace UWNP{
             img.gameObject.SetActive(false);
         }
 
-        public void pushBtn() {
+        public void connectBtnClick() {
 
             if (client != null) client.Cancel();
 
@@ -73,7 +77,7 @@ namespace UWNP{
 
         private async UniTaskVoid CreateConeccetion()
         {
-            Debug.Log("開始連線..."+ host);
+            Debug.Log("BeginConnect..."+ host);
 
             int count = 3;
             bool isConeccet = false;
@@ -94,7 +98,7 @@ namespace UWNP{
                     //img.gameObject.SetActive(false);
                 });
 
-                //請求/響應
+                //请求/响应
                 TestRq testRq = new TestRq();
                 Message<TestRp> a = await client.RequestAsync<TestRq, TestRp>("TestController.testA", testRq);
                 if (a.err>0)
@@ -107,7 +111,7 @@ namespace UWNP{
                     Debug.Log("a:" + a.info.packageType);
                 }
 
-                //請求/響應
+                //请求/响应
                 Message<TestRp2> a3 = await client.RequestAsync<TestRq, TestRp2>("TestController.testC",null,"custom1");
                 if (a3.err > 0)
                 {
@@ -120,17 +124,17 @@ namespace UWNP{
                 }
 
                 //通知
-                //TestNotify testRq2 = new TestNotify() { name="小叮噹" };
+                //TestNotify testRq2 = new TestNotify() { name="小叮当" };
                 //client.Notify("TestController.testB", testRq2);
                 //*/
             }
             else
-                Debug.Log("多次嘗試連線但依然未連線");
+                Debug.Log("Connect failed more than three times");
         }
 
         public async void SendAPI()
         {
-            //請求/響應
+            //请求/响应
             TestRq testRq = new TestRq();
             Message<TestRp> a = await client.RequestAsync<TestRq, TestRp>("TestController.testA", testRq);
             if (a.err > 0)
@@ -148,7 +152,7 @@ namespace UWNP{
         {
             if (client!=null)
             {
-                client.Cancel();
+                client.Cancel(true);
             }
         }
     }

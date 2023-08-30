@@ -1,10 +1,11 @@
 ﻿using System;
 using UnityEngine;
 using Cysharp.Threading.Tasks;
-using WebSocket4Net;
+//using WebSocket4Net;
 using System.Net;
 using System.Threading;
-using SuperSocket.ClientEngine;
+using ServerSDK.Network;
+//using SuperSocket.ClientEngine;
 
 namespace UWNP
 {
@@ -28,7 +29,7 @@ namespace UWNP
         public Action<string> OnError;
         public uint retry;
         Protocol protocol;
-        WebSocket socket;
+        IWebSocket socket;
         UniTaskCompletionSource<bool> utcs;
         private bool isForce;
         private string token;
@@ -38,21 +39,26 @@ namespace UWNP
             ServicePointManager.SecurityProtocol =
                     SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls |
                     SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;//*/
-
+            Debug.Log($"host: {host}");
             utcs = new UniTaskCompletionSource<bool>();
-            socket = new WebSocket(host);
-            socket.DataReceived += OnReceived;
-            socket.Closed += OnClose;
-            EventHandler<SuperSocket.ClientEngine.ErrorEventArgs> onErr = (sender, e) =>
+            //if (Application.platform == RuntimePlatform.WebGLPlayer)
+#if UNITY_WEBGL && !UNITY_EDITOR
+                socket = new WebSocketJS(host);
+#else
+                socket = new WebSocket(host);
+#endif
+            socket.OnMessage += OnReceived;
+            socket.OnClose += OnClose;
+            //EventHandler<SuperSocket.ClientEngine.ErrorEventArgs> onErr = (sender, e) =>
+            //{
+            //    OnError?.Invoke(e.Exception.Message);
+            //    utcs.TrySetResult(false);
+            //};
+            socket.OnError += OnErr;
+            socket.OnOpen += async (sender, e) =>
             {
-                OnError?.Invoke(e.Exception.Message);
-                utcs.TrySetResult(false);
-            };
-            socket.Error += onErr;
-            socket.Opened += async (sender, e) =>
-            {
-                socket.Error -= onErr;
-                socket.Error += OnErr;
+                socket.OnError -= OnErr;
+                socket.OnError += OnErr;
 
                 if (protocol == null)
                     protocol = new Protocol();
@@ -69,32 +75,39 @@ namespace UWNP
         public UniTask<bool> ConnectAsync(string token)
         {
             this.token = token;
-            socket.Open();
+           GameObject.FindObjectOfType<TestClient>().StartCoroutine( socket.ConnectSync());
             return utcs.Task;
         }
 
         private async void OnClose(object sender, EventArgs e)
         {
-            if (socket.State == WebSocketState.Connecting || socket.State == WebSocketState.Open) return;
+            if (socket.ReadyState == WebSocketState.Connecting || socket.ReadyState == WebSocketState.Open) return;
             await UniTask.SwitchToMainThread();
             Cancel();
             if (!isForce)
             {
                 await UniTask.Delay(1000);
-                socket.Open();
+                GameObject.FindObjectOfType<TestClient>().StartCoroutine(socket.ConnectSync());
             }
             OnDisconnect?.Invoke();
         }
 
         public void OnErr(object sender, ErrorEventArgs e)
         {
+            OnError?.Invoke(e.Exception.Message);
+            utcs.TrySetResult(false);
             Debug.LogError(e.Exception.Message);
         }
 
-        private void OnReceived(object sender, DataReceivedEventArgs e)
+        private void OnReceived(object sender, MessageEventArgs e)
         {
-            protocol.OnReceive(e.Data);
+            protocol.OnReceive(e.RawData);
         }
+
+        //private void OnReceived(object sender, DataReceivedEventArgs e)
+        //{
+        //    protocol.OnReceive(e.Data);
+        //}
 
         public void On(string route, Action<Package> cb)
         {
@@ -120,6 +133,7 @@ namespace UWNP
 
         public async UniTask<Message<S>> RequestAsync<T,S>(string route, T info = default, string modelName = null)
         {
+            Debug.Log("AAAAAAAAAAAAA");
             uint rqID = (uint)Interlocked.Increment(ref RqID);
             try
             {
@@ -143,9 +157,9 @@ namespace UWNP
         public void Cancel(bool isForce = false) {
             this.isForce = isForce;
             utcs.TrySetCanceled();
-            if (socket.State != WebSocketState.Closed)
+            if (socket.ReadyState != WebSocketState.Closed)
             {
-                socket.Close();
+                socket.CloseAsync();
             }
             if (protocol!=null)
             {

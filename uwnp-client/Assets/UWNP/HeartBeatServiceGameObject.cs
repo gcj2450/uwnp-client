@@ -3,13 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using WebSocket4Net;
+using ServerSDK.Network;
 
 namespace UWNP
 {
     public class HeartBeatServiceGameObject : MonoBehaviour
     {
         public Action OnServerTimeout;
-        private WebSocket socket;
+        private IWebSocket socket;
         public float interval = 0;
 
         public long lastReceiveHeartbeatTime;
@@ -67,10 +68,10 @@ namespace UWNP
             //lastSendHeartbeatPackTime = DateTime.Now;
             byte[] package = PackageProtocol.Encode(
                 PackageType.HEARTBEAT);
-            socket.Send(package, 0, package.Length);//*/
+            socket.SendAsync(package);//*/
         }
 
-        internal void Setup(uint interval, Action onServerTimeout, WebSocket socket)
+        internal void Setup(uint interval, Action onServerTimeout, IWebSocket socket)
         {
             this.socket = socket;
             this.interval = (interval / 1000 )/2;

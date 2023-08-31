@@ -5,6 +5,9 @@ using Cysharp.Threading.Tasks;
 using System.Net;
 using System.Threading;
 using ServerSDK.Network;
+using System.Collections;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 //using SuperSocket.ClientEngine;
 
 namespace UWNP
@@ -72,11 +75,69 @@ namespace UWNP
             };
         }
 
+        public bool IsConnected()
+        {
+            if (socket == null) return false;
+            return socket.ReadyState == WebSocketState.Open;
+        }
+
+        public void Close()
+        {
+            socket.CloseAsync();
+        }
+
         public UniTask<bool> ConnectAsync(string token)
         {
             this.token = token;
            GameObject.FindObjectOfType<TestClient>().StartCoroutine( socket.ConnectSync());
             return utcs.Task;
+        }
+
+        public IEnumerator ConnectSync()
+        {
+            Debug.Log(socket.ReadyState);
+            if (socket.ReadyState == WebSocketState.Open ||
+                socket.ReadyState == WebSocketState.Connecting)
+            {
+                Debug.LogError("Connect - alread connecting");
+                yield break;
+            }
+
+            Debug.Log("Connect - start ConnectAsync()");
+            yield return socket.ConnectSync();
+        }
+
+        public void Connect()
+        {
+            if (socket.ReadyState == WebSocketState.Open ||
+                socket.ReadyState == WebSocketState.Connecting)
+            {
+                Debug.LogError("Connect - alread connecting");
+                return;
+            }
+
+            try
+            {
+                //Debug.Log("Connect - start ConnectAsync()");
+                socket.ConnectAsync();
+            }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(ex.Message);
+            }
+            finally
+            {
+
+            }
+        }
+
+        public void UpdatePublic()
+        {
+            if (socket != null &&
+                 socket.ReadyState == WebSocketState.Open)
+            {
+                socket.Update();
+            }
         }
 
         private async void OnClose(object sender, EventArgs e)
@@ -94,6 +155,7 @@ namespace UWNP
 
         public void OnErr(object sender, ErrorEventArgs e)
         {
+            Debug.Log(e.Exception);
             OnError?.Invoke(e.Exception.Message);
             utcs.TrySetResult(false);
             Debug.LogError(e.Exception.Message);
@@ -159,6 +221,7 @@ namespace UWNP
             utcs.TrySetCanceled();
             if (socket.ReadyState != WebSocketState.Closed)
             {
+                Debug.Log("CloseAsync");
                 socket.CloseAsync();
             }
             if (protocol!=null)

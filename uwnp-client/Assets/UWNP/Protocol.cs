@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using ServerSDK.Network;
+using System.Data;
 //using WebSocket4Net;
 
 namespace UWNP
@@ -32,7 +33,10 @@ namespace UWNP
                 0,
                 "SystemController.handShake",
                 new HandShake() { token = token });
-            socket.SendAsync(package);
+            if (socket.ReadyState == WebSocketState.Open)
+                socket.SendAsync(package);
+            else
+                Debug.Log("no connect");
             return handshakeTcs.Task;
         }
 

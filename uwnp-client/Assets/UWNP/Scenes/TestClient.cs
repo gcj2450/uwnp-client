@@ -4,6 +4,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+//客户端服务端四种沟通方式
+//request 客户端发出请求
+//response 服务端回复请求
+//notify 客户端通知，服务端不必回复
+//push 服务端主动发送信息给客户端
+
 namespace UWNP{
     public class TestClient : MonoBehaviour
     {
@@ -124,8 +130,8 @@ namespace UWNP{
                 }
 
                 //通知
-                //TestNotify testRq2 = new TestNotify() { name="小叮当" };
-                //client.Notify("TestController.testB", testRq2);
+                TestNotify testRq2 = new TestNotify() { name = "小叮当" };
+                client.Notify("TestController.testB", testRq2);
                 //*/
             }
             else

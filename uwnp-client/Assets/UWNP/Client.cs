@@ -52,16 +52,18 @@ namespace UWNP
 #endif
             socket.OnMessage += OnReceived;
             socket.OnClose += OnClose;
-            //EventHandler<SuperSocket.ClientEngine.ErrorEventArgs> onErr = (sender, e) =>
-            //{
-            //    OnError?.Invoke(e.Exception.Message);
-            //    utcs.TrySetResult(false);
-            //};
-            socket.OnError += OnErr;
+            EventHandler<ErrorEventArgs> onErr = (sender, e) =>
+            {
+                Debug.Log(e.Exception);
+                OnError?.Invoke(e.Exception.Message);
+                utcs.TrySetResult(false);
+                Debug.LogError(e.Exception?.Message);
+            };
+            socket.OnError += onErr;
             socket.OnOpen += async (sender, e) =>
             {
-                socket.OnError -= OnErr;
-                socket.OnError += OnErr;
+                socket.OnError -= onErr;
+                socket.OnError += onErr;
 
                 if (protocol == null)
                     protocol = new Protocol();
@@ -153,13 +155,13 @@ namespace UWNP
             OnDisconnect?.Invoke();
         }
 
-        public void OnErr(object sender, ErrorEventArgs e)
-        {
-            Debug.Log(e.Exception);
-            OnError?.Invoke(e.Exception.Message);
-            utcs.TrySetResult(false);
-            Debug.LogError(e.Exception.Message);
-        }
+        //public void OnErr(object sender, ErrorEventArgs e)
+        //{
+        //    Debug.Log(e.Exception);
+        //    OnError?.Invoke(e.Exception?.Message);
+        //    utcs.TrySetResult(false);
+        //    Debug.LogError(e.Exception?.Message);
+        //}
 
         private void OnReceived(object sender, MessageEventArgs e)
         {

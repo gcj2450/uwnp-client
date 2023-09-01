@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using AOT;
-
+#if UNITY_WEBGL && !UNITY_EDITOR
 namespace ServerSDK.Network
 {
     /// <summary>
@@ -149,3 +149,4 @@ namespace ServerSDK.Network
         }
     }
 }
+#endif

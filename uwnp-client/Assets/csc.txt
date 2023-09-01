@@ -1,2 +1,0 @@
-//-r:I18N.dll
-//-r:I18N.West.dll

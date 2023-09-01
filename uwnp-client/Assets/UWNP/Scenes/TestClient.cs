@@ -106,6 +106,7 @@ namespace UWNP{
 
                 //请求/响应
                 TestRq testRq = new TestRq();
+                testRq.packageType = 111;
                 Message<TestRp> a = await client.RequestAsync<TestRq, TestRp>("TestController.testA", testRq);
                 if (a.err>0)
                 {
@@ -118,7 +119,8 @@ namespace UWNP{
                 }
 
                 //请求/响应
-                Message<TestRp2> a3 = await client.RequestAsync<TestRq, TestRp2>("TestController.testC",null,"custom1");
+                testRq.packageType = 1985;
+                Message<TestRp2> a3 = await client.RequestAsync<TestRq, TestRp2>("TestController.testC", testRq, "custom1");
                 if (a3.err > 0)
                 {
                     Debug.LogWarning("err:" + a3.err);

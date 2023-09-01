@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using WebSocket4Net;
+//using WebSocket4Net;
 using ServerSDK.Network;
 
 namespace UWNP

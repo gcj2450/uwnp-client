@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+#if UNITY_WEBGL && !UNITY_EDITOR
 
 namespace ServerSDK.Network
 {
@@ -163,3 +164,4 @@ namespace ServerSDK.Network
         }
     }
 }
+#endif

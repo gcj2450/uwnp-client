@@ -55,7 +55,7 @@ namespace UWNP
             EventHandler<ErrorEventArgs> onErr = (sender, e) =>
             {
                 Debug.Log(e.Exception);
-                OnError?.Invoke(e.Exception.Message);
+                OnError?.Invoke(e.Exception?.Message);
                 utcs.TrySetResult(false);
                 Debug.LogError(e.Exception?.Message);
             };
@@ -70,7 +70,7 @@ namespace UWNP
                 protocol.SetSocket(socket);
                 protocol.OnReconected = OnReconected;
                 protocol.OnError = OnError;
-                bool isOK = await protocol.HandsharkAsync(this.token);
+                bool isOK = await protocol.HandShakeAsync(this.token);
                 Debug.Log("open:" + e);
                 utcs.TrySetResult(isOK);
                 OnConnected?.Invoke();

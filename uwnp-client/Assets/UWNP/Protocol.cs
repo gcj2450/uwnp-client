@@ -6,6 +6,11 @@ using System.Threading.Tasks;
 using UnityEngine;
 using ServerSDK.Network;
 using System.Data;
+using UJNet.Data;
+using System.Net.Sockets;
+using UJNet;
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
 //using WebSocket4Net;
 
 namespace UWNP
@@ -25,20 +30,107 @@ namespace UWNP
             this.socket = socket;
         }
 
-        public UniTask<bool> HandsharkAsync(string token)
+        /// <summary>
+        /// 发送Protobuf的Package数据
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        public UniTask<bool> HandShakeAsync(string token)
         {
             handshakeTcs = new UniTaskCompletionSource<bool>();
+
             byte[] package = PackageProtocol.Encode<HandShake>(
                 PackageType.HANDSHAKE,
                 0,
                 "SystemController.handShake",
                 new HandShake() { token = token });
+
+            ByteBuffer buffer = ByteBuffer.Allocate(package.Length + 4);
+            buffer.PutInt(package.Length);
+            buffer.Put(package, true);
+            byte[] sendBytes = buffer.array();
+
             if (socket.ReadyState == WebSocketState.Open)
-                socket.SendAsync(package);
+                socket.SendAsync(sendBytes);
             else
                 Debug.Log("no connect");
             return handshakeTcs.Task;
         }
+
+        /// <summary>
+        /// 发送UJObject结构数据
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        public UniTask<bool> SendUJObjectAsync(string token)
+        {
+            handshakeTcs = new UniTaskCompletionSource<bool>();
+
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
+            UJObject uJObject = UJObject.NewInstance();
+            int userId = UnityEngine.Random.Range(0, 100000);
+            uJObject.PutLong("id", userId);
+            uJObject.PutUtfString("userName", userId.ToString());
+            uJObject.PutUtfString("pwd", "654321");
+
+            UJObject param = UJObject.NewInstance();
+            param.PutInt("c", 800);
+            param.PutUJObject("p", uJObject);
+            byte[] data = param.ToBinary();
+            ByteBuffer buffer = ByteBuffer.Allocate(data.Length + 4);
+            buffer.PutInt(data.Length);
+            buffer.Put(data, true);
+            byte[] sendBytes = buffer.array();
+            sw.Stop();
+            Debug.Log("usedtime: " + sw.ElapsedMilliseconds);
+            if (socket.ReadyState == WebSocketState.Open)
+                socket.SendAsync(sendBytes);
+            else
+                Debug.Log("no connect");
+            return handshakeTcs.Task;
+        }
+
+        public void SendViaSocket(int cmd, UJObject obj)
+        {
+            if (socket.ReadyState != WebSocketState.Open)
+            {
+                Debug.Log("WriteToSocket: Not Connected.");
+                return;
+            }
+
+            try
+            {
+                UJObject param = UJObject.NewInstance();
+                param.PutInt("c", cmd);
+                param.PutUJObject("p", obj);
+                //==============自定义修改=====================
+                //            if (ScopeHolder.attr.ContainsKey(Const.SCOPE_ACC_ID)) {
+                //	param.PutLong("acid", long.Parse(ScopeHolder.attr[Const.SCOPE_ACC_ID].ToString()));
+                //}
+                //==============自定义修改=====================
+                byte[] data = param.ToBinary();
+                ByteBuffer buffer = ByteBuffer.Allocate(data.Length + 4);
+                buffer.PutInt(data.Length);
+                buffer.Put(data, true);
+
+                byte[] sendBytes = buffer.array();
+                if (socket.ReadyState == WebSocketState.Open)
+                    socket.SendAsync(sendBytes);
+                else
+                    Debug.Log("no connect");
+            }
+            catch (NullReferenceException e)
+            {
+                Debug.Log(e.Message);
+            }
+            catch (SocketException e)
+            {
+                Debug.Log(e.Message);
+            }
+        }
+
 
         internal void Notify<T>(string route, T info)
         {
@@ -47,7 +139,13 @@ namespace UWNP
                 0,
                 route,
                 info);
-            socket.SendAsync(packBuff);
+
+            ByteBuffer buffer = ByteBuffer.Allocate(packBuff.Length + 4);
+            buffer.PutInt(packBuff.Length);
+            buffer.Put(packBuff, true);
+            byte[] sendBytes = buffer.array();
+
+            socket.SendAsync(sendBytes);
         }
 
         public UniTask<Package> RequestAsync<T>(uint packID, string route, T info = default, string modelName = null)
@@ -63,8 +161,13 @@ namespace UWNP
                 modelName);
            
                 packTcs.Add(packID, pack);
-                Debug.Log("CCCCCCCCC" + packBuff.Length);
-                socket.SendAsync(packBuff);
+
+                ByteBuffer buffer = ByteBuffer.Allocate(packBuff.Length + 4);
+                buffer.PutInt(packBuff.Length);
+                buffer.Put(packBuff, true);
+                byte[] sendBytes = buffer.array();
+
+                socket.SendAsync(sendBytes);
                 return pack.Task;
             }
         }
@@ -81,20 +184,39 @@ namespace UWNP
             }
         }
 
+        /// <summary>
+        /// 解析服务端发来的Protobuf Package数据
+        /// </summary>
+        /// <param name="bytes"></param>
         public async void OnReceive(byte[] bytes)
+        {
+            //DecodeNoLengthPackage(bytes);
+
+            ByteBuffer HBbuffer = new ByteBuffer();
+            DecodePackageData(ref HBbuffer, bytes, bytes.Length);
+            //DecodeUJObjectData(ref HBbuffer, bytes, bytes.Length);
+            await UniTask.SwitchToMainThread();
+
+        }
+
+
+        /// <summary>
+        /// 解析不带长度头的Package数据
+        /// </summary>
+        /// <param name="bytes"></param>
+        public void DecodeNoLengthPackage(byte[] bytes)
         {
             try
             {
-                await UniTask.SwitchToMainThread();
                 Package package = PackageProtocol.Decode(bytes);
 
-                //Debug.Log(package.packageType);
+                Debug.Log(package.packageType);
 
                 switch ((PackageType)package.packageType)
                 {
                     case PackageType.HEARTBEAT:
-                        //Debug.LogWarning("get HEARTBEAT");
-                        heartBeatServiceGo.HitHole();
+                        Debug.LogWarning("get HEARTBEAT");
+                        //heartBeatServiceGo.HitHole();
                         break;
                     case PackageType.RESPONSE:
                         ResponseHandler(package);
@@ -119,11 +241,191 @@ namespace UWNP
             }
             catch (Exception e)
             {
-                await UniTask.SwitchToMainThread();
                 Debug.LogError(e);
-                throw e;
             }
         }
+
+        /// <summary>
+        /// 解析带长度头的Protobuf的package数据
+        /// </summary>
+        /// <param name="byteBuffer"></param>
+        /// <param name="readBytes"></param>
+        /// <param name="bytesRead"></param>
+        void DecodePackageData(ref ByteBuffer byteBuffer, byte[] readBytes, long bytesRead)
+        {
+            byte[] recvBytes = new byte[bytesRead];
+            System.Buffer.BlockCopy(readBytes, 0, recvBytes, 0, recvBytes.Length);
+            byteBuffer.Put(recvBytes, true);
+
+            // parse HBObject
+            while (true)
+            {
+                // check if length complete
+                if (byteBuffer.Length() < 4)
+                {
+                    break;
+                }
+
+                // check if data complete
+                byteBuffer.Flip();
+                int dataLen = byteBuffer.GetInt();
+                if (byteBuffer.Length() - 4 < dataLen)
+                {
+                    byteBuffer.Position(byteBuffer.Length());
+                    break;
+                }
+
+                // get ujobj bytes
+                byte[] packageBin = new byte[dataLen];
+                byteBuffer.Get(packageBin, 0, dataLen);
+
+                try
+                {
+                    Package package = PackageProtocol.Decode(packageBin);
+
+                    Console.WriteLine("CCCCCCCCCCCCCCCC" + package.packageType);
+
+                    switch ((PackageType)package.packageType)
+                    {
+                        case PackageType.HEARTBEAT:
+                            Debug.LogWarning("get HEARTBEAT");
+                            heartBeatServiceGo.HitHole();
+                            break;
+                        case PackageType.RESPONSE:
+                            ResponseHandler(package);
+                            break;
+                        case PackageType.PUSH:
+                            PushHandler(package);
+                            break;
+                        case PackageType.HANDSHAKE:
+                            HandshakeHandler(package);
+                            break;
+                        case PackageType.KICK:
+
+                            //HandleKick(package);
+                            break;
+                        case PackageType.ERROR:
+                            ErrorHandler(package);
+                            break;
+                        default:
+                            Debug.LogError("No match packageType::" + package.packageType);
+                            break;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                }
+
+                // check bytes left  
+                int leftLen = Convert.ToInt32(byteBuffer.Length() - byteBuffer.Position());
+                if (leftLen == 0)
+                {
+                    byteBuffer = new ByteBuffer();
+                    break;
+                }
+
+                // hold left data for next parse
+                byte[] leftBytes = new byte[leftLen];
+                byteBuffer.Get(leftBytes, 0, leftLen);
+                byteBuffer = new ByteBuffer();
+                byteBuffer.Put(leftBytes, true);
+            }
+        }
+
+        /// <summary>
+        /// 解析UJObject数据结构
+        /// </summary>
+        /// <param name="byteBuffer"></param>
+        /// <param name="readBytes"></param>
+        /// <param name="bytesRead"></param>
+        void DecodeUJObjectData(ref ByteBuffer byteBuffer, byte[] readBytes, long bytesRead)
+        {
+            byte[] recvBytes = new byte[bytesRead];
+            System.Buffer.BlockCopy(readBytes, 0, recvBytes, 0, recvBytes.Length);
+            byteBuffer.Put(recvBytes, true);
+
+            // parse HBObject
+            while (true)
+            {
+                // check if length complete
+                if (byteBuffer.Length() < 4)
+                {
+                    break;
+                }
+
+                // check if data complete
+                byteBuffer.Flip();
+                int dataLen = byteBuffer.GetInt();
+                if (byteBuffer.Length() - 4 < dataLen)
+                {
+                    byteBuffer.Position(byteBuffer.Length());
+                    break;
+                }
+
+                // get ujobj bytes
+                byte[] ujObjBin = new byte[dataLen];
+                byteBuffer.Get(ujObjBin, 0, dataLen);
+                //Debug.Log("ujObjBin: "+ Encoding.UTF8.GetString(ujObjBin));
+                // convert & handle event
+                UJObject ujObj = UJObject.NewFromBinaryData(ujObjBin);
+
+                //Handle Commands
+                HandleCommands(ujObj);
+
+                // check bytes left  
+                int leftLen = Convert.ToInt32(byteBuffer.Length() - byteBuffer.Position());
+                if (leftLen == 0)
+                {
+                    byteBuffer = new ByteBuffer();
+                    break;
+                }
+
+                // hold left data for next parse
+                byte[] leftBytes = new byte[leftLen];
+                byteBuffer.Get(leftBytes, 0, leftLen);
+                byteBuffer = new ByteBuffer();
+                byteBuffer.Put(leftBytes, true);
+            }
+        }
+
+
+        public Action<int, UJObject> OnDataReceived;
+        /// <summary>
+        /// 根据协议编号处理数据
+        /// </summary>
+        /// <param name="ujObj"></param>
+        private void HandleCommands(UJObject ujObj)
+        {
+            int cmd = ujObj.GetInt("c");
+            UJObject dataBin = ujObj.GetUJObject("p");
+            //Console.WriteLine($"HandleCommands  OnDataReceived {cmd}");
+            if (OnDataReceived != null)
+            {
+                OnDataReceived(cmd, dataBin);
+            }
+            if (cmd == 803)
+            {
+                //这里发送的是用户名和密码，进行登录，登录成功发送加入游戏消息，广播所有连接用户，有玩家加入
+                HandleLogin(dataBin);
+            }
+            else if (cmd == 801)
+            {
+                //这里是接收角色位移的，所以原路把接收到的数据发送出去
+                //Server.Multicast(cmd, dataBin);
+            }
+
+        }
+
+        //处理登录信息
+        private void HandleLogin(UJObject param)
+        {
+            long id = param.GetLong("id");
+            string user = param.GetUtfString("userName");
+            string pass = param.GetUtfString("pwd");
+            Debug.Log($"HandleLogin,id: {id} __userName: {user} __pass: {pass}");
+        }
+
 
         public void StopHeartbeat()
         {
@@ -178,6 +480,7 @@ namespace UWNP
             Message<Heartbeat> msg = MessageProtocol.Decode<Heartbeat>(package.buff);
             if (msg.err > 0)
             {
+                Debug.Log("FFFFFFFFFFFF");
                 handshakeTcs.TrySetResult(false);
                 OnError?.Invoke(msg.errMsg);
                 return;
@@ -206,11 +509,12 @@ namespace UWNP
 
         private void OnServerTimeout()
         {
-            //if (socket.State == WebSocketState.Connecting)
+            Debug.Log($"OnServerTimeout: {socket.ReadyState }");
+            if (socket.ReadyState == WebSocketState.Connecting)
             {
                 socket.CloseAsync();
             }
-            //if (heartBeatServiceGo != null && socket.State != WebSocketState.Connecting && socket.State != WebSocketState.Open)
+            if (heartBeatServiceGo != null && socket.ReadyState != WebSocketState.Connecting && socket.ReadyState != WebSocketState.Open)
             {
                 heartBeatServiceGo.Stop();
             }

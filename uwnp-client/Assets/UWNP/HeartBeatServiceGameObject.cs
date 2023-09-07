@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 //using WebSocket4Net;
 using ServerSDK.Network;
+using UJNet;
 
 namespace UWNP
 {
@@ -11,7 +12,7 @@ namespace UWNP
     {
         public Action OnServerTimeout;
         private IWebSocket socket;
-        public float interval = 0;
+        public float interval = 5;
 
         public long lastReceiveHeartbeatTime;
 
@@ -46,7 +47,7 @@ namespace UWNP
             long intervalSec = curTime - lastReceiveHeartbeatTime;
             if (intervalSec > interval)
             {
-                //Debug.Log(string.Format("XXXX CheckAndSendHearbeat：s1:{0} l:{1} s:{2}", curTime, lastReceiveHeartbeatTime, intervalSec));
+                Debug.Log(string.Format("XXXX CheckAndSendHearbeat：s1:{0} l:{1} s:{2}", curTime, lastReceiveHeartbeatTime, intervalSec));
                 this.enabled = false;
                 OnServerTimeout?.Invoke();
             }
@@ -60,19 +61,28 @@ namespace UWNP
 
         public void HitHole()
         {
+            Debug.LogWarning("HeartBeat HitHole");
             lastReceiveHeartbeatTime = GetTimestamp();
         }
 
         private void SendHeartbeatPack()
         {
+            Debug.Log("AAA: SendHeartbeatPack");
             //lastSendHeartbeatPackTime = DateTime.Now;
             byte[] package = PackageProtocol.Encode(
                 PackageType.HEARTBEAT);
-            socket.SendAsync(package);//*/
+
+            ByteBuffer buffer = ByteBuffer.Allocate(package.Length + 4);
+            buffer.PutInt(package.Length);
+            buffer.Put(package, true);
+            byte[] sendBytes = buffer.array();
+
+            socket.SendAsync(sendBytes);//*/
         }
 
         internal void Setup(uint interval, Action onServerTimeout, IWebSocket socket)
         {
+            Debug.Log("interval: "+interval);
             this.socket = socket;
             this.interval = (interval / 1000 )/2;
             this.OnServerTimeout = onServerTimeout;

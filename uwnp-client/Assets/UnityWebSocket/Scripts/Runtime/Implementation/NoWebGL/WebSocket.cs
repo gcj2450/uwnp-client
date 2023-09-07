@@ -68,7 +68,7 @@ namespace ServerSDK.Network
 
         public IEnumerator ConnectSync()
         {
-            Log("Connect Task Begin ...");
+            Debug.Log("Connect Task Begin ...");
 
             WebSocketManager.Instance.Add(this);
 

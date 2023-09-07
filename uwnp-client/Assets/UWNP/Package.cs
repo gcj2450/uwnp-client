@@ -59,4 +59,15 @@ namespace UWNP
         [ProtoMember(1)]
         public uint heartbeat;
     }
+
+    [ProtoContract]
+    public class ChatMessage
+    {
+        [ProtoMember(1)]
+        public string uid;
+
+        [ProtoMember(2)]
+        public string content;
+    }
+
 }

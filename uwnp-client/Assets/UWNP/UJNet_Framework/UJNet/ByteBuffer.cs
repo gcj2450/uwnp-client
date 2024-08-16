@@ -5,7 +5,7 @@ using System.Text;
 
 namespace UJNet
 {
-    class ByteBuffer
+    public class ByteBuffer
     {
 		// big order
         public MemoryStream memStream;

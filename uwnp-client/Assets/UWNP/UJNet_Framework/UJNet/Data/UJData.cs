@@ -6,31 +6,33 @@ namespace UJNet.Data
 {
     public class UJData
     {
-        private UJDataType ujType;
-	    private object obj;
+        private SFSDataType ujType;
+        private object obj;
 
-	    public UJData(UJDataType type, Object obj) {
+        public UJData(SFSDataType type, Object obj)
+        {
             this.ujType = type;
-		    this.obj = obj;
-	    }
+            this.obj = obj;
+        }
 
         public object GetObject()
         {
-		    return obj;
-	    }
+            return obj;
+        }
 
         public void SetObject(object obj)
         {
             this.obj = obj;
-	    }
+        }
 
-        public UJDataType GetUJType()
+        public SFSDataType GetUJType()
         {
             return ujType;
-	    }
+        }
 
-	    public void SetUJType(UJDataType type) {
+        public void SetUJType(SFSDataType type)
+        {
             this.ujType = type;
-	    }
+        }
     }
 }

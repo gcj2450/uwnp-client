@@ -2,393 +2,1026 @@
 using System.Collections;
 using System.Text;
 using UJNet.Data;
-using LitJson;
+using NetCoreServer.UJNet_Framework.UJNet.Data;
+using System.Collections.Generic;
+using System.Reflection;
+using NetCoreServer.UJNet_Framework.UJNet;
+using SFSLitJson;
+using Sfs2X.Exceptions;
 
 namespace UJNet
 {
-    class DefaultUJSerializer : UJSerializer
+    public class DefaultSFSDataSerializer : ISFSDataSerializer
     {
-        private static int BUFFER_SIZE = 512;
-	    private static UJSerializer instance = new DefaultUJSerializer();
+        private static readonly string CLASS_MARKER_KEY = "$C";
 
-	    public static UJSerializer GetInstance() {
-		    return instance;
-	    }
+        private static readonly string CLASS_FIELDS_KEY = "$F";
 
-	    public byte[] Obj2Bin(UJObject obj) {
-		    ByteBuffer buffer = ByteBuffer.Allocate(BUFFER_SIZE);
-		    buffer.Put((byte) UJDataType.UJ_OBJECT.GetTypeID());
-		    buffer.PutShort((short) obj.Size());
-		    return obj2bin(obj, buffer);
-			
-	    }
+        private static readonly string FIELD_NAME_KEY = "N";
 
-	    public UJObject Bin2Obj(byte[] data) {
-		    ByteBuffer buffer = ByteBuffer.Allocate(data.Length);
-		    buffer.Put(data, true);
-			buffer.Flip();
-		    return decodeUJObject(buffer);
-	    }
-  
-	    public byte[] Array2Bin(UJArray array) {
-		    ByteBuffer buffer = ByteBuffer.Allocate(BUFFER_SIZE);
-		    buffer.Put((byte) UJDataType.UJ_ARRAY.GetTypeID());
-		    buffer.PutShort((short) array.Size());
-		    return arr2bin(array, buffer);
-	    }
+        private static readonly string FIELD_VALUE_KEY = "V";
 
-	    public UJArray Bin2Array(byte[] data) {
-		    ByteBuffer buffer = ByteBuffer.Allocate(data.Length);
-		    buffer.Put(data, true);
-			buffer.Flip();
-		    return decodeUJArray(buffer);
-	    }
-		
-		public UJObject Json2Obj(string json) {
-			if (json == null || json.Length < 2) throw new ArgumentException ("json string too short " + json);
-			JsonData data = JsonMapper.ToObject (json);
-			return decodeUJObject (data);
-		}
-		
-		public UJArray Json2Array(string json) {
-			if (json == null || json.Length < 2) throw new ArgumentException ("json string too short " + json);
-			JsonData data = JsonMapper.ToObject (json);
-			return decodeUJArray (data);
-		}
-		
+        private static DefaultSFSDataSerializer instance;
 
-	    private byte[] obj2bin(UJObject obj, ByteBuffer buffer) {
-		    ICollection keys = obj.GetKeys();
-		    foreach (string key in keys) {
-			    UJData ujData = obj.Get(key);
-			    Object dataObj = ujData.GetObject();
-			    buffer = encodeSFSObjectKey(buffer, key);
-			    buffer = encodeObject(buffer, ujData.GetUJType(), dataObj);
-		    }
-		    return buffer.array();
-	    }
+        private static Assembly runningAssembly = null;
 
-	    private byte[] arr2bin(UJArray array, ByteBuffer buffer) {
-			object[] arrays = array.ToArray();
-		    foreach (object obj in arrays) {
-			    UJData ujData = (UJData) obj;
-			    Object dataObj = ujData.GetObject();
-			    buffer = encodeObject(buffer, ujData.GetUJType(), dataObj);
-		    }
+        public static DefaultSFSDataSerializer Instance
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = new DefaultSFSDataSerializer();
+                }
+                return instance;
+            }
+        }
 
-		    return buffer.array();
-	    }
+        /// <summary>
+        /// Set this to specify the assembly you want to use when serializing/deserializing the .NET classes
+        /// If null (default) - will look for the Type in the current assembly.
+        /// </summary>
+        public static Assembly RunningAssembly
+        {
+            get
+            {
+                return runningAssembly;
+            }
+            set
+            {
+                runningAssembly = value;
+            }
+        }
 
-	    private UJObject decodeUJObject(ByteBuffer buffer) {
-		    UJObject ujObj = UJObject.NewInstance();
-		    byte headerBuffer = buffer.Get();
-		    if (headerBuffer != UJDataType.UJ_OBJECT.GetTypeID()) {
-			    throw new ArgumentException(new StringBuilder(
-					    "Invalid UJDataType:")
-					    .Append(UJDataType.UJ_OBJECT.GetTypeID())
-					    .Append(",headerBuffer : ").Append(headerBuffer).ToString()
-                        );
-		    }
+        private DefaultSFSDataSerializer()
+        {
+        }
 
-		    short size = buffer.GetShort();
-		    if (size < 0) {
-			    throw new ArgumentException((new StringBuilder(
-					    "Can't decode UJObject. Size  ")).Append(size)
-					    .ToString());
-		    }
+        public ByteArray Object2Binary(ISFSObject obj)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(Convert.ToByte(18));
+            byteArray.WriteShort(Convert.ToInt16(obj.Size()));
+            return Obj2bin(obj, byteArray);
+        }
 
-		    for (int i = 0; i < size; i++) {
-			    short keySize = buffer.GetShort();
-			    if (keySize < 0 || keySize > 255) {
-				    throw new ArgumentException();
-			    }
+        private ByteArray Obj2bin(ISFSObject obj, ByteArray buffer)
+        {
+            string[] keys = obj.GetKeys();
+            string[] array = keys;
+            foreach (string text in array)
+            {
+                SFSDataWrapper data = obj.GetData(text);
+                buffer = EncodeSFSObjectKey(buffer, text);
+                buffer = EncodeObject(buffer, data.Type, data.Data);
+            }
+            return buffer;
+        }
 
-			    byte[] keyData = new byte[keySize];
-			    buffer.Get(keyData, 0, keyData.Length);
-			    String key = Encoding.UTF8.GetString(keyData);
-			    UJData decodedObject = decodeObject(buffer);
-			    if (decodedObject == null) {
-				    throw new ArgumentException();
-			    }
-			    ujObj.Put(key, decodedObject);
-		    }
+        public ByteArray Array2Binary(ISFSArray array)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(Convert.ToByte(17));
+            byteArray.WriteShort(Convert.ToInt16(array.Size()));
+            return Arr2bin(array, byteArray);
+        }
 
-		    return ujObj;
-	    }
+        private ByteArray Arr2bin(ISFSArray array, ByteArray buffer)
+        {
+            for (int i = 0; i < array.Size(); i++)
+            {
+                SFSDataWrapper wrappedElementAt = array.GetWrappedElementAt(i);
+                buffer = EncodeObject(buffer, wrappedElementAt.Type, wrappedElementAt.Data);
+            }
+            return buffer;
+        }
 
-	    private UJArray decodeUJArray(ByteBuffer buffer) {
-		    UJArray array = UJArray.NewInstance();
-		    byte headerBuffer = buffer.Get();
-		    if (headerBuffer != UJDataType.UJ_ARRAY.GetTypeID())
-			    throw new ArgumentException();
+        public ISFSObject Binary2Object(ByteArray data)
+        {
+            if (data.Length < 3)
+            {
+                throw new SFSCodecError("Can't decode an SFSObject. Byte data is insufficient. Size: " + data.Length + " byte(s)");
+            }
+            data.Position = 0;
+            return DecodeSFSObject(data);
+        }
 
-		    short size = buffer.GetShort();
-		    if (size < 0)
-			    throw new ArgumentException();
+        private ISFSObject DecodeSFSObject(ByteArray buffer)
+        {
+            SFSObject sFSObject = SFSObject.NewInstance();
+            byte b = buffer.ReadByte();
+            if (b != Convert.ToByte(18))
+            {
+                throw new SFSCodecError("Invalid SFSDataType. Expected: " + SFSDataType.SFS_OBJECT.ToString() + ", found: " + b);
+            }
+            int num = buffer.ReadShort();
+            if (num < 0)
+            {
+                throw new SFSCodecError("Can't decode SFSObject. Size is negative: " + num);
+            }
+            try
+            {
+                for (int i = 0; i < num; i++)
+                {
+                    string text = buffer.ReadUTF();
+                    SFSDataWrapper sFSDataWrapper = DecodeObject(buffer);
+                    if (sFSDataWrapper != null)
+                    {
+                        sFSObject.Put(text, sFSDataWrapper);
+                        continue;
+                    }
+                    throw new SFSCodecError("Could not decode value for SFSObject with key: " + text);
+                }
+            }
+            catch (SFSCodecError sFSCodecError)
+            {
+                throw sFSCodecError;
+            }
+            return sFSObject;
+        }
 
-		    for (int i = 0; i < size; i++) {
-			    UJData decodedObject = decodeObject(buffer);
-			    if (decodedObject == null) {
-				    throw new ArgumentException();
-			    }
+        public ISFSArray Binary2Array(ByteArray data)
+        {
+            if (data.Length < 3)
+            {
+                throw new SFSCodecError("Can't decode an SFSArray. Byte data is insufficient. Size: " + data.Length + " byte(s)");
+            }
+            data.Position = 0;
+            return DecodeSFSArray(data);
+        }
 
-			    array.Add(decodedObject);
-		    }
-		    return array;
-	    }
-		
-		private UJObject decodeUJObject(JsonData jso)
-	    {
-	        UJObject ujObj = UJObject.NewInstance ();
-			foreach (string key in ((IDictionary)jso).Keys) {
-				JsonData d = jso[key];
-				UJData decodedObject = decodeJsonObject(d);
-			    if (decodedObject == null) {
-				    throw new ArgumentException ("not decode value for key " + d);
-			    }
-			    ujObj.Put(key, decodedObject);			
-			}
-	        return ujObj;
-	    }	
-		
-		private UJArray decodeUJArray (JsonData jso)
-		{
-			UJArray array = UJArray.NewInstance();
-			foreach (JsonData d in jso) {
-			    UJData decodedObject = decodeJsonObject(d);
-			    if (decodedObject == null) {
-				    throw new ArgumentException ("not decode value for key " + d[0]);
-			    }
-				array.Add(decodedObject);
-			}
-	        return array;
-		}
-		
+        private ISFSArray DecodeSFSArray(ByteArray buffer)
+        {
+            ISFSArray iSFSArray = SFSArray.NewInstance();
+            SFSDataType sFSDataType = (SFSDataType)Convert.ToInt32(buffer.ReadByte());
+            if (sFSDataType != SFSDataType.SFS_ARRAY)
+            {
+                throw new SFSCodecError("Invalid SFSDataType. Expected: " + SFSDataType.SFS_ARRAY.ToString() + ", found: " + sFSDataType);
+            }
+            int num = buffer.ReadShort();
+            if (num < 0)
+            {
+                throw new SFSCodecError("Can't decode SFSArray. Size is negative: " + num);
+            }
+            try
+            {
+                for (int i = 0; i < num; i++)
+                {
+                    SFSDataWrapper sFSDataWrapper = DecodeObject(buffer);
+                    if (sFSDataWrapper != null)
+                    {
+                        iSFSArray.Add(sFSDataWrapper);
+                        continue;
+                    }
+                    throw new SFSCodecError("Could not decode SFSArray item at index: " + i);
+                }
+            }
+            catch (SFSCodecError sFSCodecError)
+            {
+                throw sFSCodecError;
+            }
+            return iSFSArray;
+        }
 
-	    private ByteBuffer encodeSFSObjectKey(ByteBuffer buf, string value) {
-		    buf.PutShort((short) value.Length);
-		    buf.Put(Encoding.UTF8.GetBytes(value), true);
-			return buf;
-	    }
+        private SFSDataWrapper DecodeObject(ByteArray buffer)
+        {
+            SFSDataType sFSDataType = (SFSDataType)Convert.ToInt32(buffer.ReadByte());
+            switch (sFSDataType)
+            {
+                case SFSDataType.NULL:
+                    return BinDecode_NULL(buffer);
+                case SFSDataType.BOOL:
+                    return BinDecode_BOOL(buffer);
+                case SFSDataType.BOOL_ARRAY:
+                    return BinDecode_BOOL_ARRAY(buffer);
+                case SFSDataType.BYTE:
+                    return BinDecode_BYTE(buffer);
+                case SFSDataType.BYTE_ARRAY:
+                    return BinDecode_BYTE_ARRAY(buffer);
+                case SFSDataType.SHORT:
+                    return BinDecode_SHORT(buffer);
+                case SFSDataType.SHORT_ARRAY:
+                    return BinDecode_SHORT_ARRAY(buffer);
+                case SFSDataType.INT:
+                    return BinDecode_INT(buffer);
+                case SFSDataType.INT_ARRAY:
+                    return BinDecode_INT_ARRAY(buffer);
+                case SFSDataType.LONG:
+                    return BinDecode_LONG(buffer);
+                case SFSDataType.LONG_ARRAY:
+                    return BinDecode_LONG_ARRAY(buffer);
+                case SFSDataType.FLOAT:
+                    return BinDecode_FLOAT(buffer);
+                case SFSDataType.FLOAT_ARRAY:
+                    return BinDecode_FLOAT_ARRAY(buffer);
+                case SFSDataType.DOUBLE:
+                    return BinDecode_DOUBLE(buffer);
+                case SFSDataType.DOUBLE_ARRAY:
+                    return BinDecode_DOUBLE_ARRAY(buffer);
+                case SFSDataType.UTF_STRING:
+                    return BinDecode_UTF_STRING(buffer);
+                case SFSDataType.TEXT:
+                    return BinDecode_TEXT(buffer);
+                case SFSDataType.UTF_STRING_ARRAY:
+                    return BinDecode_UTF_STRING_ARRAY(buffer);
+                case SFSDataType.SFS_ARRAY:
+                    buffer.Position--;
+                    return new SFSDataWrapper(17, DecodeSFSArray(buffer));
+                case SFSDataType.SFS_OBJECT:
+                    {
+                        buffer.Position--;
+                        ISFSObject iSFSObject = DecodeSFSObject(buffer);
+                        byte type = Convert.ToByte(18);
+                        object data = iSFSObject;
+                        if (iSFSObject.ContainsKey(CLASS_MARKER_KEY) && iSFSObject.ContainsKey(CLASS_FIELDS_KEY))
+                        {
+                            type = Convert.ToByte(19);
+                            data = Sfs2Cs(iSFSObject);
+                        }
+                        return new SFSDataWrapper(type, data);
+                    }
+                default:
+                    throw new Exception("Unknow SFSDataType ID: " + sFSDataType);
+            }
+        }
 
-	    private ByteBuffer addData(ByteBuffer buffer, byte[] newData) {
-		    buffer.Put(newData);
-		    return buffer;
-	    }
+        private ByteArray EncodeObject(ByteArray buffer, int typeId, object data)
+        {
+            switch ((SFSDataType)typeId)
+            {
+                case SFSDataType.NULL:
+                    buffer = BinEncode_NULL(buffer);
+                    break;
+                case SFSDataType.BOOL:
+                    buffer = BinEncode_BOOL(buffer, (bool)data);
+                    break;
+                case SFSDataType.BYTE:
+                    buffer = BinEncode_BYTE(buffer, (byte)data);
+                    break;
+                case SFSDataType.SHORT:
+                    buffer = BinEncode_SHORT(buffer, (short)data);
+                    break;
+                case SFSDataType.INT:
+                    buffer = BinEncode_INT(buffer, (int)data);
+                    break;
+                case SFSDataType.LONG:
+                    buffer = BinEncode_LONG(buffer, (long)data);
+                    break;
+                case SFSDataType.FLOAT:
+                    buffer = BinEncode_FLOAT(buffer, (float)data);
+                    break;
+                case SFSDataType.DOUBLE:
+                    buffer = BinEncode_DOUBLE(buffer, (double)data);
+                    break;
+                case SFSDataType.UTF_STRING:
+                    buffer = BinEncode_UTF_STRING(buffer, (string)data);
+                    break;
+                case SFSDataType.TEXT:
+                    buffer = BinEncode_TEXT(buffer, (string)data);
+                    break;
+                case SFSDataType.BOOL_ARRAY:
+                    buffer = BinEncode_BOOL_ARRAY(buffer, (bool[])data);
+                    break;
+                case SFSDataType.BYTE_ARRAY:
+                    buffer = BinEncode_BYTE_ARRAY(buffer, (ByteArray)data);
+                    break;
+                case SFSDataType.SHORT_ARRAY:
+                    buffer = BinEncode_SHORT_ARRAY(buffer, (short[])data);
+                    break;
+                case SFSDataType.INT_ARRAY:
+                    buffer = BinEncode_INT_ARRAY(buffer, (int[])data);
+                    break;
+                case SFSDataType.LONG_ARRAY:
+                    buffer = BinEncode_LONG_ARRAY(buffer, (long[])data);
+                    break;
+                case SFSDataType.FLOAT_ARRAY:
+                    buffer = BinEncode_FLOAT_ARRAY(buffer, (float[])data);
+                    break;
+                case SFSDataType.DOUBLE_ARRAY:
+                    buffer = BinEncode_DOUBLE_ARRAY(buffer, (double[])data);
+                    break;
+                case SFSDataType.UTF_STRING_ARRAY:
+                    buffer = BinEncode_UTF_STRING_ARRAY(buffer, (string[])data);
+                    break;
+                case SFSDataType.SFS_ARRAY:
+                    buffer = AddData(buffer, Array2Binary((ISFSArray)data));
+                    break;
+                case SFSDataType.SFS_OBJECT:
+                    buffer = AddData(buffer, Object2Binary((SFSObject)data));
+                    break;
+                case SFSDataType.CLASS:
+                    buffer = AddData(buffer, Object2Binary(Cs2Sfs(data)));
+                    break;
+                default:
+                    throw new SFSCodecError("Unrecognized type in SFSObject serialization: " + typeId);
+            }
+            return buffer;
+        }
 
-	    // ============================Encode Obj============================//
-	    private ByteBuffer encodeObject(ByteBuffer buffer, UJDataType type,
-			    Object obj) {
-		    switch (type.GetTypeID()) {
+        private SFSDataWrapper BinDecode_NULL(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.NULL, null);
+        }
 
-		    case 1:
-			    buffer = binEncode_BOOL(buffer, (bool) obj);
-			    break;
+        private SFSDataWrapper BinDecode_BOOL(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.BOOL, buffer.ReadBool());
+        }
 
-		    case 2:
-			    buffer = binEncode_BYTE(buffer, (byte) obj);
-			    break;
+        private SFSDataWrapper BinDecode_BYTE(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.BYTE, buffer.ReadByte());
+        }
 
-		    case 3:
-			    buffer = binEncode_SHORT(buffer, (short) obj);
-			    break;
+        private SFSDataWrapper BinDecode_SHORT(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.SHORT, buffer.ReadShort());
+        }
 
-		    case 4:
-			    buffer = binEncode_INT(buffer, (int) obj);
-			    break;
+        private SFSDataWrapper BinDecode_INT(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.INT, buffer.ReadInt());
+        }
 
-		    case 5:
-			    buffer = binEncode_LONG(buffer, (long) obj);
-			    break;
+        private SFSDataWrapper BinDecode_LONG(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.LONG, buffer.ReadLong());
+        }
 
-		    case 6:
-			    buffer = binEncode_FLOAT(buffer, (float) obj);
-			    break;
+        private SFSDataWrapper BinDecode_FLOAT(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.FLOAT, buffer.ReadFloat());
+        }
 
-		    case 7:
-			    buffer = binEncode_DOUBLE(buffer, (double) obj);
-			    break;
+        private SFSDataWrapper BinDecode_DOUBLE(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.DOUBLE, buffer.ReadDouble());
+        }
 
-		    case 8:
-			    buffer = binEncode_UTF_STRING(buffer, (string) obj);
-			    break;
+        private SFSDataWrapper BinDecode_UTF_STRING(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.UTF_STRING, buffer.ReadUTF());
+        }
 
-		    case 9:
-			    buffer = buffer.Put(Array2Bin((UJArray) obj), true);
-			    break;
+        private SFSDataWrapper BinDecode_TEXT(ByteArray buffer)
+        {
+            return new SFSDataWrapper(SFSDataType.UTF_STRING, buffer.ReadText());
+        }
 
-		    case 10:
-			    buffer = buffer.Put(Obj2Bin((UJObject) obj), true);
-			    break;
+        private SFSDataWrapper BinDecode_BOOL_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            bool[] array = new bool[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadBool();
+            }
+            return new SFSDataWrapper(SFSDataType.BOOL_ARRAY, array);
+        }
 
-		    default:
-			    throw new ArgumentException((new StringBuilder(
-					    "Unrecognized type : ")).Append(type).ToString());
-		    }
-		    return buffer;
-	    }
+        private SFSDataWrapper BinDecode_BYTE_ARRAY(ByteArray buffer)
+        {
+            int num = buffer.ReadInt();
+            if (num < 0)
+            {
+                throw new SFSCodecError("Array negative size: " + num);
+            }
+            ByteArray data = new ByteArray(buffer.ReadBytes(num));
+            return new SFSDataWrapper(SFSDataType.BYTE_ARRAY, data);
+        }
 
-	    private ByteBuffer binEncode_BOOL(ByteBuffer buffer, bool value) {
-		    byte[] data = new byte[2];
-		    data[0] = (byte) UJDataType.BOOL.GetTypeID();
-		    data[1] = ((byte) (value ? 1 : 0));
-		    return buffer.Put(data, true);
-	    }
+        private SFSDataWrapper BinDecode_SHORT_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            short[] array = new short[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadShort();
+            }
+            return new SFSDataWrapper(SFSDataType.SHORT_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_BYTE(ByteBuffer buffer, byte value) {
-		    byte[] data = new byte[2];
-		    data[0] = (byte) UJDataType.BYTE.GetTypeID();
-		    data[1] = value;
-		    return buffer.Put(data, true);
-	    }
+        private SFSDataWrapper BinDecode_INT_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            int[] array = new int[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadInt();
+            }
+            return new SFSDataWrapper(SFSDataType.INT_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_SHORT(ByteBuffer buf, short value) {
-		    buf.Put((byte) UJDataType.SHORT.GetTypeID());
-		    buf.PutShort(value);
-			return buf;
-	    }
+        private SFSDataWrapper BinDecode_LONG_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            long[] array = new long[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadLong();
+            }
+            return new SFSDataWrapper(SFSDataType.LONG_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_INT(ByteBuffer buf, int value) {
-		    buf.Put((byte) UJDataType.INT.GetTypeID());
-		    buf.PutInt(value);
-			return buf;
-	    }
+        private SFSDataWrapper BinDecode_FLOAT_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            float[] array = new float[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadFloat();
+            }
+            return new SFSDataWrapper(SFSDataType.FLOAT_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_LONG(ByteBuffer buf, long value) {
-		    buf.Put((byte) UJDataType.LONG.GetTypeID());
-		    buf.PutLong(value);
-			return buf;
-	    }
+        private SFSDataWrapper BinDecode_DOUBLE_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            double[] array = new double[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadDouble();
+            }
+            return new SFSDataWrapper(SFSDataType.DOUBLE_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_FLOAT(ByteBuffer buf, float value) {
-		    buf.Put((byte) UJDataType.FLOAT.GetTypeID());
-		    buf.PutFloat(value);
-			return buf;
-	    }
+        private SFSDataWrapper BinDecode_UTF_STRING_ARRAY(ByteArray buffer)
+        {
+            int typedArraySize = GetTypedArraySize(buffer);
+            string[] array = new string[typedArraySize];
+            for (int i = 0; i < typedArraySize; i++)
+            {
+                array[i] = buffer.ReadUTF();
+            }
+            return new SFSDataWrapper(SFSDataType.UTF_STRING_ARRAY, array);
+        }
 
-	    private ByteBuffer binEncode_DOUBLE(ByteBuffer buf, double value) {
-		    buf.Put((byte) UJDataType.DOUBLE.GetTypeID());
-		    buf.PutDouble(value);
-			return buf;
-	    }
+        private int GetTypedArraySize(ByteArray buffer)
+        {
+            short num = buffer.ReadShort();
+            if (num < 0)
+            {
+                throw new SFSCodecError("Array negative size: " + num);
+            }
+            return num;
+        }
 
-	    private ByteBuffer binEncode_UTF_STRING(ByteBuffer buf, string value) {
-		    byte[] stringBytes = Encoding.UTF8.GetBytes(value);
-		    buf.Put((byte) UJDataType.UTF_STRING.GetTypeID());
-		    buf.PutShort((short) stringBytes.Length);
-		    buf.Put(stringBytes, true);
-			return buf;
-	    }
+        private ByteArray BinEncode_NULL(ByteArray buffer)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte((byte)0);
+            return AddData(buffer, byteArray);
+        }
 
-	    // ========================Decode Obj ==========================//
-	    private UJData decodeObject(ByteBuffer buffer) {
-		    UJData decodedObject = null;
-		    byte headerByte = buffer.Get();
+        private ByteArray BinEncode_BOOL(ByteArray buffer, bool val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.BOOL);
+            byteArray.WriteBool(val);
+            return AddData(buffer, byteArray);
+        }
 
-		    if (headerByte == UJDataType.BOOL.GetTypeID()) {
-			    decodedObject = binDecode_BOOL(buffer);
-		    } else if (headerByte == UJDataType.BYTE.GetTypeID()) {
-			    decodedObject = binDecode_BYTE(buffer);
-		    } else if (headerByte == UJDataType.SHORT.GetTypeID()) {
-			    decodedObject = binDecode_SHORT(buffer);
-		    } else if (headerByte == UJDataType.INT.GetTypeID()) {
-			    decodedObject = binDecode_INT(buffer);
-		    } else if (headerByte == UJDataType.LONG.GetTypeID()) {
-			    decodedObject = binDecode_LONG(buffer);
-		    } else if (headerByte == UJDataType.FLOAT.GetTypeID()) {
-			    decodedObject = binDecode_FLOAT(buffer);
-		    } else if (headerByte == UJDataType.DOUBLE.GetTypeID()) {
-			    decodedObject = binDecode_DOUBLE(buffer);
-		    } else if (headerByte == UJDataType.UTF_STRING.GetTypeID()) {
-			    decodedObject = binDecode_UTF_STRING(buffer);
-		    } else if (headerByte == UJDataType.UJ_ARRAY.GetTypeID()) {
-			    buffer.Position((long) (buffer.Position() - 1));
-			    decodedObject = new UJData(UJDataType.UJ_ARRAY,
-					    decodeUJArray(buffer));
-		    } else if (headerByte == UJDataType.UJ_OBJECT.GetTypeID()) {
-			    buffer.Position((long) (buffer.Position() - 1) );
-			    UJObject ujObj = decodeUJObject(buffer);
-			    decodedObject = new UJData(UJDataType.UJ_OBJECT, ujObj);
-		    } else {
-			    throw new ArgumentException();
-		    }
-		    return decodedObject;
-	    }
-		
-		private UJData decodeJsonObject (JsonData o)
-		{
-	       if(o.IsInt)
-	            return new UJData(UJDataType.INT, (int)o);
-	        if(o.IsLong)
-	            return new UJData(UJDataType.LONG, (long)o);
-	        if(o.IsDouble)
-	            return new UJData(UJDataType.DOUBLE, (double)o);
-	        if(o.IsString)
-	            return new UJData(UJDataType.UTF_STRING, (string)o);
-	        if(o.IsObject)
-	        {
-	            JsonData jso = (JsonData)o;
-	            return new UJData(UJDataType.UJ_OBJECT, decodeUJObject(jso));
-	        }
-	        if(o.IsArray)
-	            return new UJData(UJDataType.UJ_ARRAY, decodeUJArray((JsonData)o));
-	        else
-	             throw new ArgumentException();
-		}
+        private ByteArray BinEncode_BYTE(ByteArray buffer, byte val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.BYTE);
+            byteArray.WriteByte(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_BOOL(ByteBuffer buffer) {
-		    byte boolByte = buffer.Get();
-		    bool val = false;
-		    if (boolByte == 0)
-			    val = false;
-		    else if (boolByte == 1)
-			    val = true;
-		    else
-			    throw new ArgumentException();
-		    return new UJData(UJDataType.BOOL, val);
-	    }
+        private ByteArray BinEncode_SHORT(ByteArray buffer, short val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.SHORT);
+            byteArray.WriteShort(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_BYTE(ByteBuffer buffer) {
-		    byte boolByte = buffer.Get();
-		    return new UJData(UJDataType.BYTE, boolByte);
-	    }
+        private ByteArray BinEncode_INT(ByteArray buffer, int val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.INT);
+            byteArray.WriteInt(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_SHORT(ByteBuffer buffer) {
-		    short shortValue = buffer.GetShort();
-		    return new UJData(UJDataType.SHORT, shortValue);
-	    }
+        private ByteArray BinEncode_LONG(ByteArray buffer, long val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.LONG);
+            byteArray.WriteLong(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_INT(ByteBuffer buffer) {
-		    int intValue = buffer.GetInt();
-		    return new UJData(UJDataType.INT, intValue);
-	    }
+        private ByteArray BinEncode_FLOAT(ByteArray buffer, float val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.FLOAT);
+            byteArray.WriteFloat(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_LONG(ByteBuffer buffer) {
-		    long longValue = buffer.GetLong();
-		    return new UJData(UJDataType.LONG, longValue);
-	    }
+        private ByteArray BinEncode_DOUBLE(ByteArray buffer, double val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.DOUBLE);
+            byteArray.WriteDouble(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_FLOAT(ByteBuffer buffer) {
-		    float floatValue = buffer.GetFloat();
-		    return new UJData(UJDataType.FLOAT, floatValue);
-	    }
+        private ByteArray BinEncode_INT(ByteArray buffer, double val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.DOUBLE);
+            byteArray.WriteDouble(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_DOUBLE(ByteBuffer buffer) {
-		    double doubleValue = buffer.GetDouble();
-		    return new UJData(UJDataType.DOUBLE, doubleValue);
-	    }
+        private ByteArray BinEncode_UTF_STRING(ByteArray buffer, string val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.UTF_STRING);
+            byteArray.WriteUTF(val);
+            return AddData(buffer, byteArray);
+        }
 
-	    private UJData binDecode_UTF_STRING(ByteBuffer buffer) {
-		    short strLen = buffer.GetShort();
-		    if (strLen < 0) {
-			    throw new ArgumentException();
-		    } else {
-			    byte[] strData = new byte[strLen];
-			    buffer.Get(strData, 0, strLen);
-			    String decodedString = Encoding.UTF8.GetString(strData);
-			    return new UJData(UJDataType.UTF_STRING, decodedString);
-		    }
-	    }
+        private ByteArray BinEncode_TEXT(ByteArray buffer, string val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.TEXT);
+            byteArray.WriteText(val);
+            return AddData(buffer, byteArray);
+        }
 
+        private ByteArray BinEncode_BOOL_ARRAY(ByteArray buffer, bool[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.BOOL_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteBool(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_BYTE_ARRAY(ByteArray buffer, ByteArray val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.BYTE_ARRAY);
+            byteArray.WriteInt(val.Length);
+            byteArray.WriteBytes(val.Bytes);
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_SHORT_ARRAY(ByteArray buffer, short[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.SHORT_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteShort(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_INT_ARRAY(ByteArray buffer, int[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.INT_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteInt(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_LONG_ARRAY(ByteArray buffer, long[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.LONG_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteLong(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_FLOAT_ARRAY(ByteArray buffer, float[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.FLOAT_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteFloat(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_DOUBLE_ARRAY(ByteArray buffer, double[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.DOUBLE_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteDouble(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray BinEncode_UTF_STRING_ARRAY(ByteArray buffer, string[] val)
+        {
+            ByteArray byteArray = new ByteArray();
+            byteArray.WriteByte(SFSDataType.UTF_STRING_ARRAY);
+            byteArray.WriteShort(Convert.ToInt16(val.Length));
+            for (int i = 0; i < val.Length; i++)
+            {
+                byteArray.WriteUTF(val[i]);
+            }
+            return AddData(buffer, byteArray);
+        }
+
+        private ByteArray EncodeSFSObjectKey(ByteArray buffer, string val)
+        {
+            buffer.WriteUTF(val);
+            return buffer;
+        }
+
+        private ByteArray AddData(ByteArray buffer, ByteArray newData)
+        {
+            buffer.WriteBytes(newData.Bytes);
+            return buffer;
+        }
+
+        public string Object2Json(Dictionary<string, object> map)
+        {
+            return JsonMapper.ToJson(map);
+        }
+
+        public void flattenObject(Dictionary<string, object> map, ISFSObject sfsObj)
+        {
+            string[] keys = sfsObj.GetKeys();
+            foreach (string key in keys)
+            {
+                SFSDataWrapper data = sfsObj.GetData(key);
+                if (data.Type == 18)
+                {
+                    Dictionary<string, object> dictionary = new Dictionary<string, object>();
+                    map.Add(key, dictionary);
+                    flattenObject(dictionary, (ISFSObject)data.Data);
+                }
+                else if (data.Type == 17)
+                {
+                    List<object> list = new List<object>();
+                    map.Add(key, list);
+                    flattenArray(list, (ISFSArray)data.Data);
+                }
+                else
+                {
+                    map.Add(key, data.Data);
+                }
+            }
+        }
+
+        public string Array2Json(List<object> list)
+        {
+            return JsonMapper.ToJson(list);
+        }
+
+        public void flattenArray(List<object> list, ISFSArray sfsArray)
+        {
+            for (int i = 0; i < sfsArray.Size(); i++)
+            {
+                SFSDataWrapper wrappedElementAt = sfsArray.GetWrappedElementAt(i);
+                if (wrappedElementAt.Type == 18)
+                {
+                    Dictionary<string, object> dictionary = new Dictionary<string, object>();
+                    list.Add(dictionary);
+                    flattenObject(dictionary, (ISFSObject)wrappedElementAt.Data);
+                }
+                else if (wrappedElementAt.Type == 17)
+                {
+                    List<object> list2 = new List<object>();
+                    list.Add(list2);
+                    flattenArray(list2, (ISFSArray)wrappedElementAt.Data);
+                }
+                else
+                {
+                    list.Add(wrappedElementAt.Data);
+                }
+            }
+        }
+
+        public ISFSObject Json2Object(string jsonStr)
+        {
+            if (jsonStr.Length < 2)
+            {
+                throw new InvalidOperationException("Can't decode SFSObject: JSON String is too short. Len: " + jsonStr.Length);
+            }
+            JsonData jdo = JsonMapper.ToObject(jsonStr);
+            return decodeSFSObject(jdo);
+        }
+
+        public ISFSArray Json2Array(string jsonStr)
+        {
+            if (jsonStr.Length < 2)
+            {
+                throw new InvalidOperationException("Can't decode SFSArray: JSON String is too short. Len: " + jsonStr.Length);
+            }
+            JsonData jdo = JsonMapper.ToObject(jsonStr);
+            return decodeSFSArray(jdo);
+        }
+
+        private ISFSObject decodeSFSObject(JsonData jdo)
+        {
+            ISFSObject iSFSObject = SFSObjectLite.NewInstance();
+            foreach (string key in jdo.Keys)
+            {
+                JsonData jdo2 = jdo[key];
+                SFSDataWrapper sFSDataWrapper = decodeJsonObject(jdo2);
+                if (sFSDataWrapper != null)
+                {
+                    iSFSObject.Put(key, sFSDataWrapper);
+                    continue;
+                }
+                throw new InvalidOperationException("JSON > ISFSObject error: could not decode value for key: " + key);
+            }
+            return iSFSObject;
+        }
+
+        private ISFSArray decodeSFSArray(JsonData jdo)
+        {
+            ISFSArray iSFSArray = SFSArrayLite.NewInstance();
+            for (int i = 0; i < jdo.Count; i++)
+            {
+                JsonData jsonData = jdo[i];
+                SFSDataWrapper sFSDataWrapper = decodeJsonObject(jsonData);
+                if (sFSDataWrapper != null)
+                {
+                    iSFSArray.Add(sFSDataWrapper);
+                    continue;
+                }
+                throw new InvalidOperationException("JSON > ISFSArray error: could not decode value for object: " + ((jsonData != null) ? jsonData.ToString() : null));
+            }
+            return iSFSArray;
+        }
+
+        private SFSDataWrapper decodeJsonObject(JsonData jdo)
+        {
+            if (jdo == null)
+            {
+                return new SFSDataWrapper(SFSDataType.NULL, jdo);
+            }
+            if (jdo.IsInt)
+            {
+                return new SFSDataWrapper(SFSDataType.INT, (int)jdo);
+            }
+            if (jdo.IsLong)
+            {
+                return new SFSDataWrapper(SFSDataType.LONG, (long)jdo);
+            }
+            if (jdo.IsDouble)
+            {
+                return new SFSDataWrapper(SFSDataType.DOUBLE, (double)jdo);
+            }
+            if (jdo.IsBoolean)
+            {
+                return new SFSDataWrapper(SFSDataType.BOOL, (bool)jdo);
+            }
+            if (jdo.IsString)
+            {
+                return new SFSDataWrapper(SFSDataType.UTF_STRING, (string)jdo);
+            }
+            if (jdo.IsObject)
+            {
+                return new SFSDataWrapper(SFSDataType.SFS_OBJECT, decodeSFSObject(jdo));
+            }
+            if (jdo.IsArray)
+            {
+                return new SFSDataWrapper(SFSDataType.SFS_ARRAY, decodeSFSArray(jdo));
+            }
+            throw new ArgumentException(string.Format("Unrecognized DataType while converting JsonData object to SFSObject. Object: %s, Type: %s", jdo.ToString(), (jdo == null) ? "null" : jdo.GetType().ToString()));
+        }
+
+        public ISFSObject Cs2Sfs(object csObj)
+        {
+            ISFSObject iSFSObject = SFSObject.NewInstance();
+            ConvertCsObj(csObj, iSFSObject);
+            return iSFSObject;
+        }
+
+        private void ConvertCsObj(object csObj, ISFSObject sfsObj)
+        {
+            Type type = csObj.GetType();
+            string fullName = type.FullName;
+            SerializableSFSType serializableSFSType = csObj as SerializableSFSType;
+            if (serializableSFSType == null)
+            {
+                throw new SFSCodecError("Cannot serialize object: " + ((csObj != null) ? csObj.ToString() : null) + ", type: " + fullName + " -- It doesn't implement the SerializableSFSType interface");
+            }
+            ISFSArray iSFSArray = SFSArray.NewInstance();
+            sfsObj.PutUtfString(CLASS_MARKER_KEY, fullName);
+            sfsObj.PutSFSArray(CLASS_FIELDS_KEY, iSFSArray);
+            FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            FieldInfo[] array = fields;
+            foreach (FieldInfo fieldInfo in array)
+            {
+                if (!fieldInfo.IsNotSerialized)
+                {
+                    string name = fieldInfo.Name;
+                    object value = fieldInfo.GetValue(csObj);
+                    ISFSObject iSFSObject = SFSObject.NewInstance();
+                    SFSDataWrapper sFSDataWrapper = WrapField(value);
+                    if (sFSDataWrapper == null)
+                    {
+                        throw new SFSCodecError("Cannot serialize field of object: " + ((csObj != null) ? csObj.ToString() : null) + ", field: " + name + ", type: " + fieldInfo.GetType().Name + " -- unsupported type!");
+                    }
+                    iSFSObject.PutUtfString(FIELD_NAME_KEY, name);
+                    iSFSObject.Put(FIELD_VALUE_KEY, sFSDataWrapper);
+                    iSFSArray.AddSFSObject(iSFSObject);
+                }
+            }
+        }
+
+        private SFSDataWrapper WrapField(object val)
+        {
+            if (val == null)
+            {
+                return new SFSDataWrapper(SFSDataType.NULL, null);
+            }
+            SFSDataWrapper result = null;
+            if (val is bool)
+            {
+                result = new SFSDataWrapper(SFSDataType.BOOL, val);
+            }
+            else if (val is byte)
+            {
+                result = new SFSDataWrapper(SFSDataType.BYTE, val);
+            }
+            else if (val is short)
+            {
+                result = new SFSDataWrapper(SFSDataType.SHORT, val);
+            }
+            else if (val is int)
+            {
+                result = new SFSDataWrapper(SFSDataType.INT, val);
+            }
+            else if (val is long)
+            {
+                result = new SFSDataWrapper(SFSDataType.LONG, val);
+            }
+            else if (val is float)
+            {
+                result = new SFSDataWrapper(SFSDataType.FLOAT, val);
+            }
+            else if (val is double)
+            {
+                result = new SFSDataWrapper(SFSDataType.DOUBLE, val);
+            }
+            else if (val is string)
+            {
+                result = new SFSDataWrapper(SFSDataType.UTF_STRING, val);
+            }
+            else if (val is ArrayList)
+            {
+                result = new SFSDataWrapper(SFSDataType.SFS_ARRAY, UnrollArray(val as ArrayList));
+            }
+            else if (val is SerializableSFSType)
+            {
+                result = new SFSDataWrapper(SFSDataType.SFS_OBJECT, Cs2Sfs(val));
+            }
+            else if (val is Hashtable)
+            {
+                result = new SFSDataWrapper(SFSDataType.SFS_OBJECT, UnrollDictionary(val as Hashtable));
+            }
+            return result;
+        }
+
+        private ISFSArray UnrollArray(ArrayList arr)
+        {
+            ISFSArray iSFSArray = SFSArray.NewInstance();
+            foreach (object item in arr)
+            {
+                SFSDataWrapper sFSDataWrapper = WrapField(item);
+                if (sFSDataWrapper == null)
+                {
+                    throw new SFSCodecError("Cannot serialize field of array: " + ((item != null) ? item.ToString() : null) + " -- unsupported type!");
+                }
+                iSFSArray.Add(sFSDataWrapper);
+            }
+            return iSFSArray;
+        }
+
+        private ISFSObject UnrollDictionary(Hashtable dict)
+        {
+            ISFSObject iSFSObject = SFSObject.NewInstance();
+            foreach (string key in dict.Keys)
+            {
+                SFSDataWrapper sFSDataWrapper = WrapField(dict[key]);
+                if (sFSDataWrapper == null)
+                {
+                    string[] obj = new string[5] { "Cannot serialize field of dictionary with key: ", key, ", ", null, null };
+                    object obj2 = dict[key];
+                    obj[3] = ((obj2 != null) ? obj2.ToString() : null);
+                    obj[4] = " -- unsupported type!";
+                    throw new SFSCodecError(string.Concat(obj));
+                }
+                iSFSObject.Put(key, sFSDataWrapper);
+            }
+            return iSFSObject;
+        }
+
+        public object Sfs2Cs(ISFSObject sfsObj)
+        {
+            if (!sfsObj.ContainsKey(CLASS_MARKER_KEY) || !sfsObj.ContainsKey(CLASS_FIELDS_KEY))
+            {
+                throw new SFSCodecError("The SFSObject passed does not represent any serialized class.");
+            }
+            string utfString = sfsObj.GetUtfString(CLASS_MARKER_KEY);
+            Type type = null;
+            type = ((!(runningAssembly == null)) ? runningAssembly.GetType(utfString) : Type.GetType(utfString));
+            if (type == null)
+            {
+                throw new SFSCodecError("Cannot find type: " + utfString);
+            }
+            object obj = Activator.CreateInstance(type);
+            if (!(obj is SerializableSFSType))
+            {
+                throw new SFSCodecError("Cannot deserialize object: " + ((obj != null) ? obj.ToString() : null) + ", type: " + utfString + " -- It doesn't implement the SerializableSFSType interface");
+            }
+            ConvertSFSObject(sfsObj.GetSFSArray(CLASS_FIELDS_KEY), obj, type);
+            return obj;
+        }
+
+        private void ConvertSFSObject(ISFSArray fieldList, object csObj, Type objType)
+        {
+            for (int i = 0; i < fieldList.Size(); i++)
+            {
+                ISFSObject sFSObject = fieldList.GetSFSObject(i);
+                string utfString = sFSObject.GetUtfString(FIELD_NAME_KEY);
+                SFSDataWrapper data = sFSObject.GetData(FIELD_VALUE_KEY);
+                object value = UnwrapField(data);
+                FieldInfo field = objType.GetField(utfString, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (!(field == null))
+                {
+                    field.SetValue(csObj, value);
+                }
+            }
+        }
+
+        private object UnwrapField(SFSDataWrapper wrapper)
+        {
+            object result = null;
+            int type = wrapper.Type;
+            if (type <= 8)
+            {
+                result = wrapper.Data;
+            }
+            else
+            {
+                switch (type)
+                {
+                    case 17:
+                        result = RebuildArray(wrapper.Data as ISFSArray);
+                        break;
+                    case 18:
+                        {
+                            ISFSObject iSFSObject = wrapper.Data as ISFSObject;
+                            result = ((!iSFSObject.ContainsKey(CLASS_MARKER_KEY) || !iSFSObject.ContainsKey(CLASS_FIELDS_KEY)) ? RebuildDict(wrapper.Data as ISFSObject) : Sfs2Cs(iSFSObject));
+                            break;
+                        }
+                    case 19:
+                        result = wrapper.Data;
+                        break;
+                }
+            }
+            return result;
+        }
+
+        private ArrayList RebuildArray(ISFSArray sfsArr)
+        {
+            ArrayList arrayList = new ArrayList();
+            for (int i = 0; i < sfsArr.Size(); i++)
+            {
+                arrayList.Add(UnwrapField(sfsArr.GetWrappedElementAt(i)));
+            }
+            return arrayList;
+        }
+
+        private Hashtable RebuildDict(ISFSObject sfsObj)
+        {
+            Hashtable hashtable = new Hashtable();
+            string[] keys = sfsObj.GetKeys();
+            foreach (string key in keys)
+            {
+                hashtable[key] = UnwrapField(sfsObj.GetData(key));
+            }
+            return hashtable;
+        }
     }
 }

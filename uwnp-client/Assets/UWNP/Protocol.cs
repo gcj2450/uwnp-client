@@ -25,6 +25,12 @@ namespace UWNP
         public Action OnReconected;
         public Action<string> OnError;
 
+        ByteBuffer HBbuffer;
+        public Protocol()
+        {
+            HBbuffer = new ByteBuffer();
+        }
+
         public void SetSocket(IWebSocket socket)
         {
             this.socket = socket;
@@ -37,6 +43,7 @@ namespace UWNP
         /// <returns></returns>
         public UniTask<bool> HandShakeAsync(string token)
         {
+            Debug.Log($"HandShakeAsync:{token}");
             handshakeTcs = new UniTaskCompletionSource<bool>();
 
             byte[] package = PackageProtocol.Encode<HandShake>(
@@ -69,16 +76,16 @@ namespace UWNP
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            UJObject uJObject = UJObject.NewInstance();
+            SFSObject uJObject = SFSObject.NewInstance();
             int userId = UnityEngine.Random.Range(0, 100000);
             uJObject.PutLong("id", userId);
             uJObject.PutUtfString("userName", userId.ToString());
             uJObject.PutUtfString("pwd", "654321");
 
-            UJObject param = UJObject.NewInstance();
+            SFSObject param = SFSObject.NewInstance();
             param.PutInt("c", 800);
-            param.PutUJObject("p", uJObject);
-            byte[] data = param.ToBinary();
+            param.PutSFSObject("p", uJObject);
+            byte[] data = param.ToBinary().Bytes;
             ByteBuffer buffer = ByteBuffer.Allocate(data.Length + 4);
             buffer.PutInt(data.Length);
             buffer.Put(data, true);
@@ -92,7 +99,7 @@ namespace UWNP
             return handshakeTcs.Task;
         }
 
-        public void SendViaSocket(int cmd, UJObject obj)
+        public void SendViaSocket(int cmd, SFSObject obj)
         {
             if (socket.ReadyState != WebSocketState.Open)
             {
@@ -102,15 +109,15 @@ namespace UWNP
 
             try
             {
-                UJObject param = UJObject.NewInstance();
+                SFSObject param = SFSObject.NewInstance();
                 param.PutInt("c", cmd);
-                param.PutUJObject("p", obj);
+                param.PutSFSObject("p", obj);
                 //==============自定义修改=====================
                 //            if (ScopeHolder.attr.ContainsKey(Const.SCOPE_ACC_ID)) {
                 //	param.PutLong("acid", long.Parse(ScopeHolder.attr[Const.SCOPE_ACC_ID].ToString()));
                 //}
                 //==============自定义修改=====================
-                byte[] data = param.ToBinary();
+                byte[] data = param.ToBinary().Bytes;
                 ByteBuffer buffer = ByteBuffer.Allocate(data.Length + 4);
                 buffer.PutInt(data.Length);
                 buffer.Put(data, true);
@@ -166,7 +173,7 @@ namespace UWNP
                 buffer.PutInt(packBuff.Length);
                 buffer.Put(packBuff, true);
                 byte[] sendBytes = buffer.array();
-
+                Debug.Log(socket == null);
                 socket.SendAsync(sendBytes);
                 return pack.Task;
             }
@@ -192,7 +199,6 @@ namespace UWNP
         {
             //DecodeNoLengthPackage(bytes);
 
-            ByteBuffer HBbuffer = new ByteBuffer();
             DecodePackageData(ref HBbuffer, bytes, bytes.Length);
             //DecodeUJObjectData(ref HBbuffer, bytes, bytes.Length);
             await UniTask.SwitchToMainThread();
@@ -201,7 +207,7 @@ namespace UWNP
 
 
         /// <summary>
-        /// 解析不带长度头的Package数据
+        /// 解析不带长度头的Package数据,Nodejs服务端使用这个
         /// </summary>
         /// <param name="bytes"></param>
         public void DecodeNoLengthPackage(byte[] bytes)
@@ -210,7 +216,7 @@ namespace UWNP
             {
                 Package package = PackageProtocol.Decode(bytes);
 
-                Debug.Log(package.packageType);
+                Debug.Log("DecodeNoLengthPackage: "+package.route);
 
                 switch ((PackageType)package.packageType)
                 {
@@ -230,6 +236,10 @@ namespace UWNP
                     case PackageType.KICK:
 
                         //HandleKick(package);
+                        break;
+                    case PackageType.NOTIFY:
+                        Debug.Log($"ddddddddddddd:{package.route}");
+                        NotifyHandler(package);
                         break;
                     case PackageType.ERROR:
                         ErrorHandler(package);
@@ -279,43 +289,12 @@ namespace UWNP
                 byte[] packageBin = new byte[dataLen];
                 byteBuffer.Get(packageBin, 0, dataLen);
 
-                try
-                {
-                    Package package = PackageProtocol.Decode(packageBin);
+                HandlePacket(packageBin);
 
-                    Console.WriteLine("CCCCCCCCCCCCCCCC" + package.packageType);
-
-                    switch ((PackageType)package.packageType)
-                    {
-                        case PackageType.HEARTBEAT:
-                            Debug.LogWarning("get HEARTBEAT");
-                            heartBeatServiceGo.HitHole();
-                            break;
-                        case PackageType.RESPONSE:
-                            ResponseHandler(package);
-                            break;
-                        case PackageType.PUSH:
-                            PushHandler(package);
-                            break;
-                        case PackageType.HANDSHAKE:
-                            HandshakeHandler(package);
-                            break;
-                        case PackageType.KICK:
-
-                            //HandleKick(package);
-                            break;
-                        case PackageType.ERROR:
-                            ErrorHandler(package);
-                            break;
-                        default:
-                            Debug.LogError("No match packageType::" + package.packageType);
-                            break;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError(e);
-                }
+                //如果是SFSObject协议从这里打开就行
+                //SFSObject ujObj = SFSObject.NewFromBinaryData(new NetCoreServer.UJNet_Framework.UJNet.Data.ByteArray(ujObjBin));
+                ////Handle Commands
+                //HandleCommands(ujObj);
 
                 // check bytes left  
                 int leftLen = Convert.ToInt32(byteBuffer.Length() - byteBuffer.Position());
@@ -333,73 +312,116 @@ namespace UWNP
             }
         }
 
-        /// <summary>
-        /// 解析UJObject数据结构
-        /// </summary>
-        /// <param name="byteBuffer"></param>
-        /// <param name="readBytes"></param>
-        /// <param name="bytesRead"></param>
-        void DecodeUJObjectData(ref ByteBuffer byteBuffer, byte[] readBytes, long bytesRead)
+        public void HandlePacket(byte[] packageBin)
         {
-            byte[] recvBytes = new byte[bytesRead];
-            System.Buffer.BlockCopy(readBytes, 0, recvBytes, 0, recvBytes.Length);
-            byteBuffer.Put(recvBytes, true);
-
-            // parse HBObject
-            while (true)
+            try
             {
-                // check if length complete
-                if (byteBuffer.Length() < 4)
+                Package package = PackageProtocol.Decode(packageBin);
+
+                switch ((PackageType)package.packageType)
                 {
-                    break;
+                    case PackageType.HEARTBEAT:
+                        Debug.LogWarning("get HEARTBEAT");
+                        heartBeatServiceGo.HitHole();
+                        break;
+                    case PackageType.RESPONSE:
+                        ResponseHandler(package);
+                        break;
+                    case PackageType.PUSH:
+                        PushHandler(package);
+                        break;
+                    case PackageType.HANDSHAKE:
+                        HandshakeHandler(package);
+                        break;
+                    case PackageType.KICK:
+
+                        //HandleKick(package);
+                        break;
+                    case PackageType.NOTIFY:
+                        Debug.Log("MDDDDDDDDDDDDDD0");
+                        NotifyHandler(package);
+                        break;
+                    case PackageType.ERROR:
+                        ErrorHandler(package);
+                        break;
+                    default:
+                        Debug.LogError("No match packageType::" + package.packageType);
+                        break;
                 }
-
-                // check if data complete
-                byteBuffer.Flip();
-                int dataLen = byteBuffer.GetInt();
-                if (byteBuffer.Length() - 4 < dataLen)
-                {
-                    byteBuffer.Position(byteBuffer.Length());
-                    break;
-                }
-
-                // get ujobj bytes
-                byte[] ujObjBin = new byte[dataLen];
-                byteBuffer.Get(ujObjBin, 0, dataLen);
-                //Debug.Log("ujObjBin: "+ Encoding.UTF8.GetString(ujObjBin));
-                // convert & handle event
-                UJObject ujObj = UJObject.NewFromBinaryData(ujObjBin);
-
-                //Handle Commands
-                HandleCommands(ujObj);
-
-                // check bytes left  
-                int leftLen = Convert.ToInt32(byteBuffer.Length() - byteBuffer.Position());
-                if (leftLen == 0)
-                {
-                    byteBuffer = new ByteBuffer();
-                    break;
-                }
-
-                // hold left data for next parse
-                byte[] leftBytes = new byte[leftLen];
-                byteBuffer.Get(leftBytes, 0, leftLen);
-                byteBuffer = new ByteBuffer();
-                byteBuffer.Put(leftBytes, true);
+            }
+            catch (Exception e)
+            {
+                OnError?.Invoke(e.Message);
             }
         }
 
+        ///// <summary>
+        ///// 解析UJObject数据结构
+        ///// </summary>
+        ///// <param name="byteBuffer"></param>
+        ///// <param name="readBytes"></param>
+        ///// <param name="bytesRead"></param>
+        //void DecodeUJObjectData(ref ByteBuffer byteBuffer, byte[] readBytes, long bytesRead)
+        //{
+        //    byte[] recvBytes = new byte[bytesRead];
+        //    System.Buffer.BlockCopy(readBytes, 0, recvBytes, 0, recvBytes.Length);
+        //    byteBuffer.Put(recvBytes, true);
 
-        public Action<int, UJObject> OnDataReceived;
+        //    // parse HBObject
+        //    while (true)
+        //    {
+        //        // check if length complete
+        //        if (byteBuffer.Length() < 4)
+        //        {
+        //            break;
+        //        }
+
+        //        // check if data complete
+        //        byteBuffer.Flip();
+        //        int dataLen = byteBuffer.GetInt();
+        //        if (byteBuffer.Length() - 4 < dataLen)
+        //        {
+        //            byteBuffer.Position(byteBuffer.Length());
+        //            break;
+        //        }
+
+        //        // get ujobj bytes
+        //        byte[] ujObjBin = new byte[dataLen];
+        //        byteBuffer.Get(ujObjBin, 0, dataLen);
+        //        //Debug.Log("ujObjBin: "+ Encoding.UTF8.GetString(ujObjBin));
+        //        // convert & handle event
+        //        SFSObject ujObj = SFSObject.NewFromBinaryData(new NetCoreServer.UJNet_Framework.UJNet.Data.ByteArray( ujObjBin));
+
+        //        //Handle Commands
+        //        HandleCommands(ujObj);
+
+        //        // check bytes left  
+        //        int leftLen = Convert.ToInt32(byteBuffer.Length() - byteBuffer.Position());
+        //        if (leftLen == 0)
+        //        {
+        //            byteBuffer = new ByteBuffer();
+        //            break;
+        //        }
+
+        //        // hold left data for next parse
+        //        byte[] leftBytes = new byte[leftLen];
+        //        byteBuffer.Get(leftBytes, 0, leftLen);
+        //        byteBuffer = new ByteBuffer();
+        //        byteBuffer.Put(leftBytes, true);
+        //    }
+        //}
+
+
+        public Action<int, SFSObject> OnDataReceived;
         /// <summary>
         /// 根据协议编号处理数据
         /// </summary>
         /// <param name="ujObj"></param>
-        private void HandleCommands(UJObject ujObj)
+        private void HandleCommands(SFSObject ujObj)
         {
             int cmd = ujObj.GetInt("c");
-            UJObject dataBin = ujObj.GetUJObject("p");
-            //Console.WriteLine($"HandleCommands  OnDataReceived {cmd}");
+            SFSObject dataBin = (SFSObject)ujObj.GetSFSObject("p");
+            //Debug.Log($"HandleCommands  OnDataReceived {cmd}");
             if (OnDataReceived != null)
             {
                 OnDataReceived(cmd, dataBin);
@@ -418,12 +440,13 @@ namespace UWNP
         }
 
         //处理登录信息
-        private void HandleLogin(UJObject param)
+        private void HandleLogin(SFSObject param)
         {
             long id = param.GetLong("id");
             string user = param.GetUtfString("userName");
             string pass = param.GetUtfString("pwd");
             Debug.Log($"HandleLogin,id: {id} __userName: {user} __pass: {pass}");
+
         }
 
 
@@ -499,6 +522,13 @@ namespace UWNP
                 heartBeatServiceGo.ResetTimeout(msg.info.heartbeat);
             }//*/
             handshakeTcs.TrySetResult(true);
+        }
+
+        private void NotifyHandler(Package package)
+        {
+            Debug.Log("NOtifyyyyyyyyyyy:"+package.route);
+            TestPush info = MessageProtocol.DecodeInfo<TestPush>(package.buff);
+            Debug.Log("NOtifyyyyyyyyyyy"+ info.info);
         }
 
         private void ErrorHandler(Package package)

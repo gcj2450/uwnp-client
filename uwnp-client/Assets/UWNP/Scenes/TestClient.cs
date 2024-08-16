@@ -97,43 +97,45 @@ namespace UWNP{
             {
                 img.gameObject.SetActive(true);
 
-                //// On
-                //client.On("testOn",(Package pack) => {
-                //    TestPush info = MessageProtocol.DecodeInfo<TestPush>(pack.buff);
-                //    Debug.Log(JsonUtility.ToJson(info));
-                //    //img.gameObject.SetActive(false);
-                //});
+                // On
+                client.On("TestController.testOn", (Package pack) =>
+                {
+                    Debug.Log("%%%%%%%%%%%%");
+                    TestPush info = MessageProtocol.DecodeInfo<TestPush>(pack.buff);
+                    Debug.Log("push teston :"+info.info);
+                    //img.gameObject.SetActive(false);
+                });
 
                 //请求/响应
-                //TestRq testRq = new TestRq();
-                //testRq.packageType = 111;
-                //Message<TestRp> a = await client.RequestAsync<TestRq, TestRp>("TestController.testA", testRq);
-                //if (a.err > 0)
-                //{
-                //    Debug.LogWarning("err:" + a.err);
-                //    Debug.LogWarning("err msg:" + a.errMsg);
-                //}
-                //else
-                //{
-                //    Debug.Log("a:" + a.info.packageType);
-                //}
+                TestRq testRq = new TestRq();
+                testRq.packageType = 1024;
+                Message<TestRp> a = await client.RequestAsync<TestRq, TestRp>("TestController.testA", testRq);
+                if (a.err > 0)
+                {
+                    Debug.LogWarning("err:" + a.err);
+                    Debug.LogWarning("err msg:" + a.errMsg);
+                }
+                else
+                {
+                    Debug.Log("aaaaa:" + a.info.packageType);
+                }
 
-                ////请求/响应
-                //testRq.packageType = 1985;
-                //Message<TestRp2> a3 = await client.RequestAsync<TestRq, TestRp2>("TestController.testC", testRq, "custom1");
-                //if (a3.err > 0)
-                //{
-                //    Debug.LogWarning("err:" + a3.err);
-                //    Debug.LogWarning("err msg:" + a3.errMsg);
-                //}
-                //else
-                //{
-                //    Debug.Log("a:" + a3.info.info);
-                //}
+                //请求/响应
+                testRq.packageType = 1985;
+                Message<TestRp2> a3 = await client.RequestAsync<TestRq, TestRp2>("TestController.testC", testRq, "custom1");
+                if (a3.err > 0)
+                {
+                    Debug.LogWarning("err:" + a3.err);
+                    Debug.LogWarning("err msg:" + a3.errMsg);
+                }
+                else
+                {
+                    Debug.Log("a:" + a3.info.info);
+                }
 
-                ////通知
-                //TestNotify testRq2 = new TestNotify() { name = "小叮当" };
-                //client.Notify("TestController.testB", testRq2);
+                //通知
+                TestNotify testRq2 = new TestNotify() { name = "小叮当" };
+                client.Notify("TestController.testB", testRq2);
             }
             else
                 Debug.Log("Connect failed more than three times");

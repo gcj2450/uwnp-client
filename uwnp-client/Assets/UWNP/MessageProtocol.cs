@@ -26,7 +26,7 @@ namespace UWNP
 
         public static Message<T> Decode<T>(byte[] buff)
         {
-            Debug.Log(buff.Length);
+            //Debug.Log(buff.Length);
             Message<T> rs;
             try
             {
@@ -34,7 +34,7 @@ namespace UWNP
                 //protobuf反序列化
                 MemoryStream mem = new MemoryStream(buff);
                 rs = Serializer.Deserialize<Message<T>>(mem);
-                Debug.Log(rs.err);
+                //Debug.Log(rs.err);
                 mem.Close();
                 return rs;
             }

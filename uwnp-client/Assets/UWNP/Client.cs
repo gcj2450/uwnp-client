@@ -71,7 +71,7 @@ namespace UWNP
                 protocol.OnReconected = OnReconected;
                 protocol.OnError = OnError;
                 bool isOK = await protocol.HandShakeAsync(this.token);
-                Debug.Log("open:" + e);
+                Debug.Log("open:" + e.ToString());
                 utcs.TrySetResult(isOK);
                 OnConnected?.Invoke();
             };
@@ -88,10 +88,11 @@ namespace UWNP
             socket.CloseAsync();
         }
 
-        public UniTask<bool> ConnectAsync(string token)
+        public UniTask<bool> ConnectAsync(string _token)
         {
-            this.token = token;
-           GameObject.FindObjectOfType<TestClient>().StartCoroutine( socket.ConnectSync());
+            this.token = _token;
+            //GameObject.FindObjectOfType<TestClient>().StartCoroutine( socket.ConnectSync());
+            socket.ConnectAsync();
             return utcs.Task;
         }
 
@@ -197,7 +198,6 @@ namespace UWNP
 
         public async UniTask<Message<S>> RequestAsync<T,S>(string route, T info = default, string modelName = null)
         {
-            Debug.Log("AAAAAAAAAAAAA");
             uint rqID = (uint)Interlocked.Increment(ref RqID);
             try
             {

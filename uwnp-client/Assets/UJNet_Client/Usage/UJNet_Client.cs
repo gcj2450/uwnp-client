@@ -60,13 +60,18 @@ public class UJNet_Client : MonoBehaviour
         client.AddConnectionListener(OnConnection);
         client.AddConnectionLostListener(OnConnectionLost);
         client.AddDebugMessageListener(OnDebugMessage);
-        if(UJNetManager.Instance.UseWebSocket)
+        switch (UJNetManager.Instance.NetWorkTransType)
         {
-            client.Connect("127.0.0.1", 9933);
-        }
-        else
-        {
-            client.Connect("127.0.0.1", 32211);
+            case NetworkTransportType.TCP:
+                client.Connect("127.0.0.1", 32211);
+                break;
+            case NetworkTransportType.UDP:
+                break;
+            case NetworkTransportType.WebSocket:
+                client.Connect("127.0.0.1", 9933);
+                break;
+            default:
+                break;
         }
     }
 

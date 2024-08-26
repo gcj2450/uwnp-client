@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System;
 using System.Collections;
 using System.IO;
@@ -17,7 +17,7 @@ public class UJNetManager : MonoBehaviour
 			return mInstance;
 		}
 	}
-	public bool UseWebSocket = true;
+	public NetworkTransportType NetWorkTransType = NetworkTransportType.TCP;
 	private NetClient client;
 	
 	public NetClient Client {
@@ -26,7 +26,7 @@ public class UJNetManager : MonoBehaviour
 	
 	void Awake ()
 	{
-		client = new NetClient(true, UseWebSocket);
+		client = new NetClient(true, NetWorkTransType);
 		client.AddDebugMessageListener(OnDebugMessage);
 
 		Application.runInBackground = true;
@@ -57,7 +57,7 @@ public class UJNetManager : MonoBehaviour
 	
 	void OnApplicationQuit ()
 	{
-        //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+        //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
         // save jid
   //      if (ScopeHolder.attr.ContainsKey(Const.SCOPE_JID)) {
 		//	string jid = (string)ScopeHolder.attr[Const.SCOPE_JID];
@@ -67,7 +67,7 @@ public class UJNetManager : MonoBehaviour
 		//}
 		
 		//PlayerPrefs.DeleteKey(Const.NOTICE_CITY);
-        //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+        //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
         // notify svr logout
         if (client != null){
             SFSObject param = SFSObject.NewInstance ();
@@ -81,10 +81,10 @@ public class UJNetManager : MonoBehaviour
 #if UNITY_ANDROID
 		if (Input.GetKeyDown(KeyCode.Escape)) {
 			Debug.Log("press escape");
-            //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+            //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
    //         ChangeUIEventArgs args = ConfirmBoxCtrl.CreateSelfArgs (null, I18NManager.Instance.GetProp ("quit.comfirm"), null, null);
 			//ConfirmBoxCtrl.Instance.OpenSelf (this, OnQuitByEscapeConfirm, null, args);
-            //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+            //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
         }
 #endif
     }
@@ -92,7 +92,7 @@ public class UJNetManager : MonoBehaviour
 	public void OnQuitByEscapeConfirm (int callBackCMD, object sender, ChangeUIEventArgs args, out bool destoryCallBack, out bool closePanel, ChangeUIEventArgs attr)
 	{
 		closePanel = destoryCallBack = false;
-        //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+        //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
   //      switch (callBackCMD) {
 		//case ConfirmBoxCtrl.BTN_CMD_COMPLETE_BRING_IN:
 			
@@ -106,13 +106,13 @@ public class UJNetManager : MonoBehaviour
 		//	closePanel = destoryCallBack = true;
 		//	break;
 		//}
-        //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+        //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
     }
 
     void HandleLog (string logString, string stackTrace, LogType type)
 	{
 		if (type == LogType.Exception || type == LogType.Error) {
-            //==============×Ô¶¨ÒåÐÞ¸Ä=====================
+            //==============è‡ªå®šä¹‰ä¿®æ”¹=====================
             //UserManager.Instance.SendClientLog(logString + "\n" + stackTrace);
         }
     }

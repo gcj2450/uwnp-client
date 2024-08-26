@@ -22,11 +22,21 @@ using UnityEngine.SocialPlatforms;
 //[assembly: AssemblyKeyFile("/keyfile.snk")]
 namespace UJNet
 {
-	public class NetClient: IDisposable {
+    /// <summary>
+    /// 网络连接类型
+    /// </summary>
+    public enum NetworkTransportType
+    {
+        TCP,
+        UDP,
+        WebSocket
+    }
+
+    public class NetClient: IDisposable {
 
         Protocol protocol;
         IWebSocket socket;
-		public bool UseWebSocket=true;
+		public NetworkTransportType NetWorkTransType = NetworkTransportType.TCP;
 		private TcpClient socketConnection;
 		private NetworkStream networkStream;
 
@@ -109,9 +119,9 @@ namespace UJNet
 			this.OnDebugMessage -= del;
 		}
 		
-		public NetClient(bool debug,bool useWebSocket){
+		public NetClient(bool debug, NetworkTransportType netType){
 			this.debug = debug;
-			this.UseWebSocket = useWebSocket;
+			this.NetWorkTransType = netType;
 			commandHandler = new CommandHandler(this);
 			
 			ServicePointManager.Expect100Continue = false;
@@ -137,15 +147,18 @@ namespace UJNet
 			//get { return this.connected; }
 			get
 			{
-				if (UseWebSocket)
+				switch (NetWorkTransType)
 				{
-					if (socket == null) return false;
-					return socket.ReadyState == WebSocketState.Open;
+					case NetworkTransportType.TCP:
+                        return this.connected;
+					case NetworkTransportType.UDP:
+                        return this.connected;
+					case NetworkTransportType.WebSocket:
+                        if (socket == null) return false;
+                        return socket.ReadyState == WebSocketState.Open;
+					default:
+						return this.connected;
 				}
-				else
-				{
-                    return this.connected;
-                }
 			}
 		}
 
@@ -170,18 +183,23 @@ namespace UJNet
 				buffer.Put(data, true);
 				
 				byte[] sendBytes = buffer.array();
-				if (!UseWebSocket)
-				{
-					networkStream.Write(sendBytes, 0, sendBytes.Length);
-					networkStream.Flush();
-				}
-				else
-				{
-					if (socket.ReadyState == WebSocketState.Open)
-						socket.SendAsync(sendBytes);
-					else
-						HandleIOError("Not Connect");
-				}
+
+                switch (NetWorkTransType)
+                {
+                    case NetworkTransportType.TCP:
+                        networkStream.Write(sendBytes, 0, sendBytes.Length);
+                        networkStream.Flush();
+						break;
+                    case NetworkTransportType.UDP:
+						break;
+                    case NetworkTransportType.WebSocket:
+                        if (socket.ReadyState == WebSocketState.Open)
+                            socket.SendAsync(sendBytes);
+                        else
+                            HandleIOError("Not Connect");
+						break;
+                }
+
             } catch ( NullReferenceException e ) {
 				HandleIOError(e.Message);
 			} catch ( SocketException e ) {
@@ -212,15 +230,20 @@ namespace UJNet
                     this.port = port;
 					
 					Debug.Log("connect socket: ip " + ipAddress + "/port " + port);
-					if (UseWebSocket)
-					{
-						ConnectThread();
-					}
-					else
-					{
-						thrConnect = new Thread(ConnectThread);
-						thrConnect.Start();
-					}
+
+                    switch (NetWorkTransType)
+                    {
+                        case NetworkTransportType.TCP:
+                            thrConnect = new Thread(ConnectThread);
+                            thrConnect.Start();
+                            break;
+                        case NetworkTransportType.UDP:
+                            break;
+                        case NetworkTransportType.WebSocket:
+                            ConnectThread();
+                            break;
+                    }
+
 				}
                 catch (Exception e)
                 {
@@ -237,22 +260,27 @@ namespace UJNet
             lock (disconnectionLocker){
            		if (connected){
                     try{
-						if (!UseWebSocket)
-						{
-							socketConnection.Close();
-						}
-						else
-						{
-							if (socket.ReadyState != WebSocketState.Closed)
-							{
-								socket.CloseAsync();
-							}
-                            if (protocol != null)
-                            {
-                                protocol.StopHeartbeat();
-                                protocol.CanceledAllUTcs();
-                            }
+
+                        switch (NetWorkTransType)
+                        {
+                            case NetworkTransportType.TCP:
+                                socketConnection.Close();
+                                break;
+                            case NetworkTransportType.UDP:
+                                break;
+                            case NetworkTransportType.WebSocket:
+                                if (socket.ReadyState != WebSocketState.Closed)
+                                {
+                                    socket.CloseAsync();
+                                }
+                                if (protocol != null)
+                                {
+                                    protocol.StopHeartbeat();
+                                    protocol.CanceledAllUTcs();
+                                }
+                                break;
                         }
+
                     }
                     catch (Exception e){
                         DebugMessage("Disconnect Exception: " + e.ToString());
@@ -270,48 +298,52 @@ namespace UJNet
         {
             try
             {
-				if (!UseWebSocket)
-				{
-					socketConnection = new TcpClient();
-					socketConnection.NoDelay = true;
+                switch (NetWorkTransType)
+                {
+                    case NetworkTransportType.TCP:
+                        socketConnection = new TcpClient();
+                        socketConnection.NoDelay = true;
 
-					socketConnection.Connect(ipAddress, port);
+                        socketConnection.Connect(ipAddress, port);
 
-					connected = true;
-					networkStream = socketConnection.GetStream();
-					thrSocketReader = new Thread(HandleSocketData);
-					thrSocketReader.Start();
+                        connected = true;
+                        networkStream = socketConnection.GetStream();
+                        thrSocketReader = new Thread(HandleSocketData);
+                        thrSocketReader.Start();
 
-					HandleSocketConnection();
-				}
-				else
-				{
-                    ServicePointManager.SecurityProtocol =
-						SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls |
-						SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;//*/
+                        HandleSocketConnection();
+                        break;
+                    case NetworkTransportType.UDP:
+                        break;
+                    case NetworkTransportType.WebSocket:
+                        ServicePointManager.SecurityProtocol =
+                        SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls |
+                        SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;//*/
 
-					string host = string.Format("ws://{0}:{1}/={2}", ipAddress, port, "1.0.0");
+                        string host = string.Format("ws://{0}:{1}/={2}", ipAddress, port, "1.0.0");
 #if UNITY_WEBGL && !UNITY_EDITOR
 								socket = new WebSocketJS(host);
 #else
-					socket = new WebSocket(host);
+                        socket = new WebSocket(host);
 #endif
-					HBbuffer = new ByteBuffer();
-					socket.OnMessage += OnReceived;
-					socket.OnClose += OnClose;
-					socket.OnError += OnError;
-					socket.OnOpen += OnOpen;
-					if (socket.ReadyState == WebSocketState.Open ||
-				   socket.ReadyState == WebSocketState.Connecting)
-					{
-						Debug.LogError("Connect - alread connecting");
-						return;
-					}
-                    Debug.Log("Connect - start ConnectAsync()");
-                    socket.ConnectAsync();
+                        HBbuffer = new ByteBuffer();
+                        socket.OnMessage += OnReceived;
+                        socket.OnClose += OnClose;
+                        socket.OnError += OnError;
+                        socket.OnOpen += OnOpen;
+                        if (socket.ReadyState == WebSocketState.Open ||
+                       socket.ReadyState == WebSocketState.Connecting)
+                        {
+                            Debug.LogError("Connect - alread connecting");
+                            return;
+                        }
+                        Debug.Log("Connect - start ConnectAsync()");
+                        socket.ConnectAsync();
 
-                    connected = true;
-				}
+                        connected = true;
+                        break;
+                }
+
             }
             catch (SocketException e)
             {

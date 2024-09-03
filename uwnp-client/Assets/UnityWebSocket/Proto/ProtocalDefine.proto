@@ -1,0 +1,2953 @@
+syntax = "proto3";
+
+package Z;
+option go_package = "/";
+
+import "google/protobuf/any.proto";
+import "GameObject.proto";
+
+// 命令规则及说明：
+// 所有的协议包都以CS,SC,SS开头，分别表示，客户端->服务器，服务器->客户端，服务器->服务器
+// 所有的协议包都以Req,Res,Upd结束，分别表示，请求，响应，及通知，所有的Req均对应一个Res，Upd是由服务器主动发起
+
+// CS区间 - req res upd[0x0101, 0x1000]
+// SC区间 - req res upd[0x1001, 0x2000]
+// SS区间 - req [0x3002, 0x4000] res[0x4001, 0x5000] upd[0x5001, 0x5FFF]
+
+// 协议命令区段定义
+enum EnumCmdCodeRange
+{
+  EnumCmdCodeRangeNone = 0;
+
+  CSBegin = 0x0101;
+  CSEnd = 0x1000;
+  SSBegin = 0x3001;
+  SSReqBegin = 0x3002;
+  SSReqEnd = 0x4000;
+  SSResBegin = 0x4001;
+  SSResEnd = 0x5000;
+  SSUpdBegin = 0x5001;
+  SSUpdEnd = 0x5FFF;
+  SSEnd = 0x6000;
+
+  SCBegin = 0x8001;
+  SCEnd = 0xF000;
+}
+
+// 协议CMD定义
+enum EnumCmdCode
+{
+  // 无效的命令
+  eNone = 0x0000;
+
+  ////////////////////////////////////////////////////// 客户端协议 //////////////////////////////////////////////////////
+
+  // 登录
+  csLoginReq = 0x0101;
+  scLoginRes = 0x8101;
+  // 角色列表
+  csRoleListReq = 0x0102;
+  scRoleListRes = 0x8102;
+  //scRoleListUpd = 0xC002;
+  // 世界列表
+  csWorldListReq = 0x0103;
+  scWorldListRes = 0x8103;
+  //scWorldListUpd = 0xC003;
+  // 创建角色
+  csCreateRoleReq = 0x0104;
+  scCreateRoleRes = 0x8104;
+  // 进入世界
+  csEnterWorldReq = 0x0105;
+  scEnterWorldRes = 0x8105;
+  scEnterWorldSpaceUpd = 0xC005;
+  // Nearby
+  scNearbyUpd = 0xC006;
+  // 离开游戏
+  csLeaveWorldReq = 0x0107;
+  scLeaveWorldRes = 0x8107;
+  // 登出
+  csLogoutReq = 0x0108;
+  scLogoutRes = 0x8108;
+  // 交互
+  csInteractionReq = 0x0109;
+  scInteractionRes = 0x8109;
+  //服务器通知客户端交互
+  scInteractionUpd = 0xC109;
+  // 玩家行走
+  csPlayerWalkReq = 0x010A;
+  scPlayerWalkRes = 0x810A;
+  // 广播周围玩家位置信息
+  csCliPlayerWalkReq = 0xC00A;
+  // 空间列表
+  csSpaceListReq = 0x010B;
+  scSpaceListRes = 0x810B;
+  // 玩家部位位置
+  csBodyPartChgPosReq = 0x010C;
+  scBodyPartChgPosRes = 0x810C;
+  // 广播周围玩家部位位置信息
+  csCliBodyPartChgPosReq = 0xC00C;
+  // proxy广播包
+  csClientBroadCastReq = 0x010D;
+  // 位置和身体部位的组合广播周围玩家
+  csCliComposePosUpd = 0xC00D;
+  //客户端激活
+  csUserActiveReq = 0x010E;
+  scUserActiveRes = 0x810E;
+  //心跳包
+  csUserPingReq = 0x010F;
+  scUserPingRes = 0x810F;
+  //修改角色
+  csChangeRoleReq = 0x0110;
+  scChangeRoleRes = 0x8110;
+  //获取语音token
+  csChatTokenReq = 0x0111;
+  scChatTokenRes = 0x8111;
+  //获取玩家脸部数据
+  csPlayerFacesReq = 0x0112 [deprecated = true];
+  scPlayerFacesRes = 0x8112 [deprecated = true];
+  //检测角色名是否可用
+  csUerNameCheckReq = 0x0113;
+  scUerNameCheckRes = 0x8113;
+  // 玩家被禁言（已废弃，应由服务器端发起）
+  csChatForbidReq = 0x0114 [deprecated = true];
+  scChatForbidRes = 0x8114 [deprecated = true];
+  // 玩家被禁言
+  scChatForbidUpd = 0xC114;
+  //更新希壤币请求（已废弃，应由服务端发起）
+  csUpdateCionReq = 0x0115 [deprecated = true];
+  scUpdateCionRes = 0x8115 [deprecated = true];
+  //连接ProxySrv后的认证过程
+  csVerifyQueueTokenReq = 0x0116;
+  scVerifyQueueTokenRes = 0x8116;
+  //断线重连的逻辑
+  csReConnectReq = 0x0117;
+  scReConnectRes = 0x8117;
+  //proxysrv向客户端发送的更新sessionID协议
+  scChangeSessionIDUpd = 0xC118;
+  //连接QueueSrv后的认证过程
+  csVerifyLoginTokenReq = 0x0119;
+  scVerifyLoginTokenRes = 0x8119;
+  //QueueSrv通知到客户端的剩余人数
+  scLeftUsrCountUpd = 0xC11A;
+  //QueueSrv通知到客户端连接的ProxySrv地址
+  scConnectToProxySrvUpd = 0xC11B;
+
+  // 查询好友列表
+  csFriendListReq = 0x011C;
+  scFriendListRes = 0x811C;
+  // 查询好友申请列表
+  csFriendApplyListReq = 0x011D;
+  scFriendApplyListRes = 0x811D;
+  // 申请加好友
+  csFriendApplyReq = 0x011E;
+  scFriendApplyRes = 0x811E;
+  // 好友申请答复
+  csFriendApplyReplyReq = 0x011F;
+  scFriendApplyReplyRes = 0x811F;
+  // 删除好友
+  csFriendDeleteReq = 0x0120;
+  scFriendDeleteRes = 0x8120;
+  // 有新的好友申请通知
+  scFriendApplyListChangeUpd = 0xC121;
+  // 好友列表变化通知
+  scFriendListChangeUpd = 0xC122;
+  // 设置好友备注
+  csFriendSetNoteReq = 0x0123;
+  scFriendSetNoteRes = 0x8123;
+  // 查询好友申请历史列表
+  csFriendApplyHistoryListReq = 0x0124;
+  scFriendApplyHistoryListRes = 0x8124;
+
+  // 消息通知
+  scNotifyMsgUpd = 0xC125;
+
+  // 物品去掉new标记
+  csPackItemDelNewReq = 0x0126;
+  scPackItemDelNewRes = 0x8126;
+
+  // OBS全景音获取token接口
+  csOBSChatTokenReq = 0x0127;
+  scOBSChatTokenRes = 0x8127;
+
+  // 查询用户
+  csQueryUserReq = 0x0223;
+  scQueryUserRes = 0x8223;
+
+  // 使用物品
+  csUsePackItemReq = 0x0224;
+  scUsePackItemRes = 0x8224;
+
+  // 用户互动 准备
+  csIntimacyPrepareReq = 0x0225;
+  scIntimacyPrepareRes = 0x8225;
+
+  // 用户互动 开始
+  csIntimacyDoReq = 0x0226;
+  scIntimacyDoRes = 0x8226;
+
+  // 语音通话 打电话
+  csPhoneCallReq = 0x0227;
+  scPhoneCallRes = 0x8227;
+  // 语音通话 电话通知(被打电话者收到通知)
+  scPhoneCallUpd = 0xC227;
+
+  // 语音通话 接电话
+  csPhoneAnswerReq = 0x0228;
+  scPhoneAnswerRes = 0x8228;
+  // 语音通话 接电话通知
+  scPhoneAnswerUpd = 0xC228;
+
+  // 语音通话 挂电话(多人时自己离开，两人时直接全部挂断)
+  csPhoneHungUpReq = 0x0229;
+  scPhoneHungUpRes = 0x8229;
+  // 语音通话 挂电话通知
+  scPhoneHungUpUpd = 0xC229;
+
+  // 语音通话 通话中止(所有人员全部挂断)
+  csPhoneAbortReq = 0x022A;
+  scPhoneAbortRes = 0x822A;
+  // 语音通话 通话中止(所有人员全部挂断)
+  scPhoneAbortUpd = 0xC22A;
+
+  // 用户互动 广播
+  scIntimacyPrepareUpd = 0xC22E;
+  scIntimacyDoUpd = 0xC22F;
+
+  // 好友申请同意通知
+  scFriendApplyResponseUpd = 0xC230;
+
+  scAreaUpd = 0xC231;
+
+  // MassiveNearby同步包
+  scMassiveNearbyUpd = 0xC232;
+
+  //任务操作
+  csTaskOpReq = 0x0233;
+  scTaskOpRes = 0x8233;
+
+  //任务目标发生
+  csTaskEventCaseReq = 0x0234;
+  scTaskEventCaseRes = 0x8234;
+
+  // 玩家上下线通知
+  scRoleOnOrOffLineUpd = 0xC235;
+
+  // 角色改名通知
+  scChgRoleNameNotifyUpd = 0xC236;
+
+  // 物品改变通知 提示用
+  scItemChangeUpd = 0xC237;
+
+  // 角色自己信息改变通知
+  scSelfChangeUpd = 0xC238;
+
+  // 通知客户端清空nearby
+  scClearNearbyUpd = 0xC239;
+
+  // 空间对象信息改变通知
+  scSpaceChangeUpd = 0xC23A;
+
+  // nearby热力图更新
+  scNearbyHotUpd = 0xC23B;
+
+  // 设置角色配置
+  csSetRoleConfigReq = 0x023C;
+  scSetRoleConfigRes = 0x823C;
+
+  /******************************* Message Server *******************************/
+
+  // 客户端推送聊天消息到服务端
+  csPushChatMessageReq = 0x0E01;
+  scPushChatMessageRes = 0xEE01;
+
+  // 服务端推送聊天消息到客户端
+  scPushChatMessageUpd = 0xCE01;
+
+  // 推送读回执
+  csPushReadReceiptReq = 0x0E02;
+  scPushReadReceiptRes = 0xEE02;
+
+  // 推送离开/进去频道消息到客户端
+  scPushLeaveEnterChannelUpd = 0xCE02;
+
+  // 推送用户访问消息系统专有Token，该Token推送时机为用户登陆希壤后的动作
+  scPushMessageTokenUpd = 0xCE03;
+
+  // 推送读回执列表
+  csPushReadReceiptListReq = 0x0E03;
+  scPushReadReceiptListRes = 0xEE03;
+
+  // 拉取频道列表
+  csPullChannelListReq = 0x0E04;
+  scPullChannelListRes = 0xEE04;
+
+  // 拉取私聊消息内容
+  csPullPrivateChatReq = 0x0E05;
+  scPullPrivateChatRes = 0xEE05;
+
+  // 创建 Message Server Token
+  csCreateUserTokenReq = 0x0E06;
+  scCreateUserTokenRes = 0xEE06;
+
+  // 置顶频道,返回置顶频道列表
+  csSetTopChannelReq = 0x0E07;
+  scSetTopChannelRes = 0xEE07;
+
+  // 取消置顶频道
+  csUnsetTopChannelReq = 0x0E08;
+  scUnsetTopChannelRes = 0xEE08;
+
+  // 查询置顶频道
+  csQueryTopChannelReq = 0x0E09;
+  scQueryTopChannelRes = 0xEE09;
+
+  // 离开频道
+  csLeaveChannelReq = 0x0E0A;
+  scLeaveChannelRes = 0xEE0A;
+
+  // 消息服务登陆
+  csMessageLoginReq = 0x0E11;
+  scMessageLoginRes = 0xEE11;
+
+  // 推送消息内容（音频、视频、图片等）至消息服务器专有数据通道
+  csPushChatMessageContentReq = 0x0E12;
+  scPushChatMessageContentRes = 0xEE12;
+
+  ////////////////////////////////////////////////////// 服务器协议 //////////////////////////////////////////////////////
+
+  // 合并包，包体中包含多个完整包
+  ssContainer = 0x3002;
+
+  // 服务器之间建立连接后，发送的第一个包
+  ssHelloReq = 0x3003;
+  ssHelloRes = 0x4001;
+
+  /****************************** 服务器管理GLOBALSERVER ******************************/
+
+  // 服务器管理Global，注册服务器
+  ssRegServerReq = 0x3004;
+  ssRegServerRes = 0x4002;
+
+  // 服务器向srvmanager发送的心跳包
+  ssHeartbeatReq = 0x3005;
+  ssHeartbeatRes = 0x4003;
+
+  // 根据ID查询服务器信息
+  ssGetSrvByIDReq = 0x3006;
+  ssGetSrvByIDRes = 0x4004;
+
+  // 按类型申请一台最佳的服务器
+  ssGetSrvBestReq = 0x3007;
+  ssGetSrvBestRes = 0x4005;
+
+  // 注销服务器
+  ssDeleteServerReq = 0x3008;
+  ssDeleteServerRes = 0x4006;
+
+  // 申请服务器ID
+  ssGenSrvIDReq = 0x3009;
+  ssGenSrvIDRes = 0x4007;
+
+  // 服务器断线通知
+  ssSrvOfflineUpd = 0x300A;
+
+  // 获得一个类型的所有服务
+  ssGetSrvsByTypeReq = 0x300B;
+  ssGetSrvsByTypeRes = 0x400B;
+
+  // 设置portBind接口
+  ssSetSrvPortBindReq = 0x300C;
+  ssSetSrvPortBindRes = 0x400C;
+
+  // 广播消息到所有srvMgr服务器
+  ssBroadMsg2AllSrvMgrReq = 0x300D;
+  ssBroadMsg2AllSrvMgrRes = 0x400D;
+
+  // 整个系统内屏蔽协议的处理
+  ssShutDownMsgReq = 0x300E;
+  ssShutDownMsgRes = 0x400E;
+
+  // 查询被屏蔽的协议
+  ssQueryShutDownMsgReq = 0x300F;
+  ssQueryShutDownMsgRes = 0x400F;
+
+  // 服务配置查询
+  ssQuerySrvConfigReq = 0x3030;
+  ssQuerySrvConfigRes = 0x4030;
+
+  // 服务配置更新
+  ssUpdateSrvConfigReq = 0x3031;
+  ssUpdateSrvConfigRes = 0x4031;
+
+  // static data查询
+  ssQueryStaticDataReq = 0x3032;
+  ssQueryStaticDataRes = 0x4032;
+
+  // static data更新
+  ssUpdateStaticDataReq = 0x3033;
+  ssUpdateStaticDataRes = 0x4033;
+
+  // lua脚本查询
+  ssQueryScriptReq = 0x3034;
+  ssQueryScriptRes = 0x4034;
+
+  // lua脚本更新通知
+  ssUpdateScriptReq = 0x3035;
+  ssUpdateScriptRes = 0x4035;
+
+  // 查询运行时配置（包含消息屏蔽、代码屏蔽等）
+  ssQueryRuntimeConfigReq = 0x3036;
+  ssQueryRuntimeConfigRes = 0x4036;
+
+  // 查询服务逻辑时间
+  ssQueryLogicTimeReq = 0x3037;
+  ssQueryLogicTimeRes = 0x4037;
+
+  // 修改服务逻辑时间
+  ssChangeLogicTimeReq = 0x3038;
+  ssChangeLogicTimeRes = 0x4038;
+
+  // web静态数据文件设置
+  ssSetServerStaticDataReq = 0x3039;
+  ssSetServerStaticDataRes = 0x4039;
+
+  // web静态数据文件获取
+  ssGetServerStaticDataReq = 0x303A;
+  ssGetServerStaticDataRes = 0x403A;
+
+  // web静态数据文件删除
+  ssDelServerStaticDataReq = 0x303B;
+  ssDelServerStaticDataRes = 0x403B;
+
+  // 查询global var静态数据
+  ssQueryGlobalVarDataReq = 0x303C;
+  ssQueryGlobalVarDataRes = 0x403C;
+
+  // 更新global var静态数据
+  ssUpdateGlobalVarDataReq = 0x303D;
+  ssUpdateGlobalVarDataRes = 0x403D;
+
+  // 根据类型获取服务器所有静态数据文件
+  ssGetAllServerStaticDataByTypeReq = 0x303E;
+  ssGetAllServerStaticDataByTypeRes = 0x403E;
+
+  /***********************************************************************************/
+
+  // 角色踢下线
+  ssUserKickReq = 0x3010;
+  ssUserKickRes = 0x4010;
+
+  // 获取别人捏脸信息
+  ssPlayerFacesReq = 0x3011;
+  ssPlayerFacesRes = 0x4011;
+
+  // 角色信息改变服务器协议
+  ssPlayerChgRoleReq = 0x3012;
+  ssPlayerChgRoleRes = 0x4012;
+
+  // 角色名检测协议
+  ssCheckRoleNameReq = 0x3013;
+  ssCheckRoleNameRes = 0x4013;
+
+  // 设置嘉宾ID
+  ssSetGuestIdReq = 0x3014;
+  ssSetGuestIdRes = 0x4014;
+
+  /****************************** 聊天管理GLOBALSERVER ******************************/
+
+  // 敏感词检查
+  ssTextFilterReq = 0x3020;
+  ssTextFilterRes = 0x4020;
+
+  /******************************* 地图管理GLOBALSERVER *******************************/
+
+  // pos server上对象移动（离开或进入一个地块）
+  ssPosServerObjMoveReq = 0x3040;
+  ssPosServerObjMoveRes = 0x4040;
+
+  // 通知pos server创建一个地图块
+  ssCreateMapBlockImgReq = 0x3041;
+  ssCreateMapBlockImgRes = 0x4041;
+
+  // pos server向 map globalserver更新自身的负载信息
+  ssPosServerOverloadUpd = 0x3042;
+
+  // 通过地块信息，查询此地块所有的镜像信息
+  ssBlockImgInfoReq = 0x3043;
+  ssBlockImgInfoRes = 0x4042;
+
+  // 订阅镜像创建通知
+  ssSubscribeBlockImgChangeReq = 0x3045;
+  ssSubScribeBlockImgChangeRes = 0x4043;
+
+  // 通知所有订阅的端，有新的镜像被添加或删除了
+  ssBlockImgChangeUpd = 0x3044;
+
+  /****************************** 通知周围玩家信息改变 ******************************/
+
+  ssNearbyBroad = 0x3050;
+
+  //尝试更新自己的货币消费信息
+  ssCionCostInfoReq = 0x3051;
+  ssCionCostInfoRes = 0x4051;
+
+  /******************************* Cache管理GLOBALSERVER *******************************/
+
+  ssSaveCacheObjectReq = 0x3060;
+  ssSaveCacheObjectRes = 0x4060;
+
+  ssLoadCacheObjectReq = 0x3061;
+  ssLoadCacheObjectRes = 0x4061;
+
+  ssCreateCacheObjectReq = 0x3062;
+  ssCreateCacheObjectRes = 0x4062;
+
+  ssDeleteCacheObjectReq = 0x3063;
+  ssDeleteCacheObjectRes = 0x4063;
+
+  ssPersistenceIDGenReq = 0x3064;
+  ssPersistenceIDGenRes = 0x4064;
+
+  ssLoadRoleListReq = 0x3065;
+  ssLoadRoleListRes = 0x4065;
+
+  ssNetLockGetReq = 0x3066;
+  ssNetLockGetRes = 0x4066;
+
+  ssNetLockReleaseReq = 0x3067;
+  ssNetLockReleaseRes = 0x4067;
+
+  ssCheckRepeatedRoleNameReq = 0x3068;
+  ssCheckRepeatedRoleNameRes = 0x4068;
+
+  ssChangeRoleNameReq = 0x3069;
+  ssChangeRoleNameRes = 0x4069;
+
+  /******************************* NpcMgr管理GLOBALSERVER *******************************/
+
+  // NpcMgr向WorldSrv发送的创建NPC请求
+  ssCreateNpcOnWorldSrvReq = 0x3070;
+  ssCreateNpcOnWorldSrvRes = 0x4070;
+
+  // NpcMgr向WorldSrv发送加载NPC请求
+  ssLoadNpcOnWorldSrvReq = 0x3071;
+  ssLoadNpcOnWorldSrvRes = 0x4071;
+
+  // NpcMgr向WorldSrv发送的删除NPC请求
+  ssDeleteNpcOnWorldSrvReq = 0x3072;
+  ssDeleteNpcOnWorldSrvRes = 0x4072;
+
+  // 其他服务器向NpcMgr发送的创建NPC请求
+  ssCreateNpcReq = 0x3073;
+  ssCreateNpcRes = 0x4073;
+
+  // 其他服务器向NpcMgr发送的删除NPC请求
+  ssDeleteNpcReq = 0x3074;
+  ssDeleteNpcRes = 0x4074;
+
+  // 加载NPC请求(支持从静态数据或数据库加载)
+  ssLoadNpcReq = 0x3075;
+  ssLoadNpcRes = 0x4075;
+
+  /******************************* 属性管理GLOBALSERVER *******************************/
+
+  // 创建对象
+  ssCreateObjectReq = 0x3080;
+  ssCreateObjectRes = 0x4080;
+
+  // 存储属性
+  ssSavePropertyReq = 0x3081;
+  ssSavePropertyRes = 0x4081;
+
+  // 读取属性
+  ssLoadPropertyReq = 0x3082;
+  ssLoadPropertyRes = 0x4082;
+
+  // 删除属性
+  ssDeletePropertyReq = 0x3083;
+  ssDeletePropertyRes = 0x4083;
+
+  // 清除对象及其所有的属性
+  ssDeleteObjectReq = 0x3084;
+  ssDeleteObjectRes = 0x4084;
+
+  // 获取在线用户对象列表
+  ssOnlineUserListReq = 0x3085;
+  ssOnlineUserListRes = 0x4085;
+
+  // 添加在线用户列表
+  ssOnlineUserListAddReq = 0x3086;
+  ssOnlineUserListAddRes = 0x4086;
+
+  // 删除在线用户列表
+  ssOnlineUserListDelReq = 0x3087;
+  ssOnlineUserListDelRes = 0x4087;
+
+  // 修改在线用户列表
+  ssOnlineUserListModifyReq = 0x3088;
+  ssOnlineUserListModifyRes = 0x4088;
+
+  // 返回在线用户人数
+  ssOnlineUserListCountReq = 0x3089;
+  ssOnlineUserListCountRes = 0x4089;
+
+  // 查询在线用户
+  ssOnlineUserQueryReq = 0x308A;
+  ssOnlineUserQueryRes = 0x408A;
+
+  /******************************* PROXYSRV *******************************/
+
+  // 通知proxysrv顶号
+  ssReplaceKickPlayerProxyReq = 0x3090;
+  ssReplaceKickPlayerProxyRes = 0x4090;
+
+  // 在worldsrv上放置玩家对象
+  ssCreatePlayerOnWorldSrvReq = 0x3091;
+  ssCreatePlayerOnWorldSrvRes = 0x4091;
+
+  // 通知worldsrv玩家离开
+  ssDeletePlayerOnWorldSrvReq = 0x3092;
+  ssDeletePlayerOnWorldSrvRes = 0x4092;
+
+  // 通知worldsrv玩家断线
+  ssPlayerDisconnectToWorldSrvReq = 0x3093;
+  ssPlayerDisconnectToWorldSrvRes = 0x4093;
+
+  // 有新的角色创建通知
+  ssNewRoleCreatedUpdReq = 0x3094;
+  ssNewRoleCreatedUpdRes = 0x4094;
+
+  // 角色删除通知
+  ssRoleDeletedUpdReq = 0x3095;
+  ssRoleDeletedUpdRes = 0x4095;
+
+  // 角色上下线通知
+  ssRoleOnOrOfflineNotifyUpd = 0xC096;
+
+  // 角色改名通知
+  ssChgRoleNameNotifyUpd = 0xC097;
+
+  /******************************* World server *******************************/
+
+  ssRemoveUserFromWorldReq = 0x30B1;
+  ssRemoveUserFromWorldRes = 0x40B1;
+
+  ssObjRemoteCallReq = 0x30B2;
+  ssObjRemoteCallRes = 0x40B2;
+
+  ssBroadcastProtoCmd = 0x5010;
+
+  // 获取在线用户代币
+  ssGetOnlinePlayerMoneyReq = 0x30B3;
+  ssGetOnlinePlayerMoneyRes = 0x40B3;
+
+  // 设置在线用户代币
+  ssChgOnlinePlayerMoneyReq = 0x30B4;
+  ssChgOnlinePlayerMoneyRes = 0x40B4;
+
+  // 远程调用
+  ssWorldRemoteCallReq = 0x30B5;
+  ssWorldRemoteCallRes = 0x40B5;
+
+  // 获取在线用户物品
+  ssGetOnlinePlayerItemReq = 0x30B6;
+  ssGetOnlinePlayerItemRes = 0x40B6;
+
+  // 修改在线用户物品
+  ssChgOnlinePlayerItemReq = 0x30B7;
+  ssChgOnlinePlayerItemRes = 0x40B7;
+
+  // 修改在线用户角色名
+  ssChgOnlinePlayerRoleNameReq = 0x30BA;
+  ssChgOnlinePlayerRoleNameRes = 0x40BA;
+
+  // 迁移对象：迁入
+  ssMigrateObjectInReq = 0x30BB;
+  ssMigrateObjectInRes = 0x40BB;
+
+  // 加载场景
+  ssLoadSceneReq = 0x30BC;
+  ssLoadSceneRes = 0x40BC;
+
+  // 卸载场景
+  ssUnloadSceneReq = 0x30BD;
+  ssUnloadSceneRes = 0x40BD;
+
+  // 从世界移除对象 (用于world server之间)
+  ssRemoveObjFromWorldReq = 0x30BE;
+  ssRemoveObjFromWorldRes = 0x40BE;
+
+  // 对象激活通知
+  ssObjActiveNotifyUpd = 0x5004;
+
+  // 获取在线用户捏脸版本
+  ssGetOnlinePlayerFaceVerReq = 0x30BF;
+  ssGetOnlinePlayerFaceVerRes = 0x40BF;
+
+  // 对象所在world server变更通知
+  ssObjWorldSrvChangeUpd = 0x5005;
+
+  /******************************* SCAPI *******************************/
+  // 查询角色信息
+  ssRoleListReq = 0x3101;
+  ssRoleListRes = 0x4101;
+
+  // 各端实时在线人数
+  ssOnlinePlayerNumReq = 0x3102;
+  ssOnlinePlayerNumRes = 0x4102;
+
+  // 踢人
+  ssKickPlayerReq = 0x3103;
+  ssKickPlayerRes = 0x4103;
+
+  // 全服交互指令
+  ssGlobalInteractionReq = 0x3104;
+  ssGlobalInteractionRes = 0x4104;
+
+  // 交互指令
+  ssInteractionReq = 0x3105;
+  ssInteractionRes = 0x4105;
+
+  // 获取最佳排队服务器
+  ssBestQueueAddressReq = 0x3106;
+  ssBestQueueAddressRes = 0x4106;
+
+  // 注销帐号
+  ssCancelUserReq = 0x3107;
+  ssCancelUserRes = 0x4107;
+
+  // 查询NPC
+  ssQueryNpcReq = 0x3108;
+  ssQueryNpcRes = 0x4108;
+
+  // 设置对象var
+  ssSetVarReq = 0x3109;
+  ssSetVarRes = 0x4109;
+
+  // 获取对象var
+  ssGetVarReq = 0x310A;
+  ssGetVarRes = 0x410A;
+
+  // 获取对象朝向
+  ssGetDirectionReq = 0x310B;
+  ssGetDirectionRes = 0x410B;
+
+  // 设置对象朝向
+  ssSetDirectionReq = 0x310C;
+  ssSetDirectionRes = 0x410C;
+
+  // 获取voice房间角色列表
+  ssGetVoiceRoleListReq = 0x310D;
+  ssGetVoiceRoleListRes = 0x410D;
+
+  // 设置voice角色禁言
+  ssSetVoiceRoleBanReq = 0x310E;
+  ssSetVoiceRoleBanRes = 0x410E;
+
+  // 全局消息通知，跑马灯通知，谨慎调用
+  ssNotifyGlobalMsgReq = 0x310F;
+  ssNotifyGlobalMsgRes = 0x410F;
+
+  // 获取用户代币
+  ssGetPlayerMoneyReq = 0x3110;
+  ssGetPlayerMoneyRes = 0x4110;
+
+  // 设置用户代币
+  ssChgPlayerMoneyReq = 0x3111;
+  ssChgPlayerMoneyRes = 0x4111;
+
+  // 获取用户物品
+  ssGetPlayerItemReq = 0x3112;
+  ssGetPlayerItemRes = 0x4112;
+
+  // 修改用户物品
+  ssChgPlayerItemReq = 0x3113;
+  ssChgPlayerItemRes = 0x4113;
+
+  // 个人消息通知
+  ssNotifySingleMsgReq = 0x3114;
+  ssNotifySingleMsgRes = 0x4114;
+
+  // 通过角色名模糊查询账号id和角色id
+  ssQueryRoleInfoByFuzzyNameReq = 0x3115;
+  ssQueryRoleInfoByFuzzyNameRes = 0x4115;
+
+  // 修改角色名
+  ssChgPlayerRoleNameReq = 0x3116;
+  ssChgPlayerRoleNameRes = 0x4116;
+
+  ssTaskEventCaseReq = 0x3117;
+  ssTaskEventCaseRes = 0x4117;
+  /******************************* Area manager server *******************************/
+
+  // areamgr向worldsrv发送，创建区域对象
+  ssCreateAreaReq = 0x3201;
+  ssCreateAreaRes = 0x4201;
+
+  // 删除区域对象
+  ssDeleteAreaReq = 0x3202;
+  ssDeleteAreaRes = 0x4202;
+
+  // areamgr向worldsrv发送对象进入区域
+  // 此协议会同时向Area和obj所在的worldsrv发送
+  ssEnterAreaUpd = 0xC203;  // 进入
+  ssLeaveAreaUpd = 0xC204;  // 离开
+
+  // worldsrv向areamgr发送的对象同步消息
+  ssObjWalkToAreaMgrUpd = 0xC205;
+
+  // 查询区域所在的worldsrv
+  ssQueryAreaObjWorldSrvIDReq = 0x3206;
+  ssQueryAreaObjWorldSrvIDRes = 0x4206;
+
+  // worldsrv向areamgr同步的超视距对象状态
+  ssSyncSuperRangeObjUpd = 0xC207;
+
+  // worldsrv向areamgr同步的MassiveNearby信息
+  ssSyncMassiveNearbyUpd = 0xC208;
+
+  // areamgr向worldsrv同步超视距对象的NEARBY
+  // 超视距不能做为nearby在worldsrv上进行处理
+  // ssSyncSuperRangeNearbyUpd = 0xC209;
+
+  // worldsrv向areamgr同步的区域变量状态（仅同步有other属性的变量）
+  ssSyncAreaScriptVarUpd = 0xC20A;
+
+  // worldsrv通知areamgr删除超视距对象
+  ssDelSuperRangeObjUpd = 0xC20B;
+
+  // 全局大型列表对象 - 操作
+  ssGlobalListOPReq = 0x320C;
+  ssGlobalListOPRes = 0x420C;
+
+  // 全局变量对象 - 信息获取
+  ssGlobalVarInfoReq = 0x320D;
+  ssGlobalVarInfoRes = 0x420D;
+
+  // 全局HASH表对象 - 操作
+  ssGlobalHashOPReq = 0x320E;
+  ssGlobalHashOPRes = 0x420E;
+
+  // 全局SET对象 - 操作
+  ssGlobalSetOPReq = 0x320F;
+  ssGlobalSetOPRes = 0x420F;
+
+  // 加载区域请求(目前只支持从静态数据加载)
+  ssLoadAreaReq = 0x3210;
+  ssLoadAreaRes = 0x4210;
+
+  // 卸载区域
+  ssUnloadAreaReq = 0x3211;
+  ssUnloadAreaRes = 0x4211;
+
+  /******************************* Terminal manager server *******************************/
+  // 为world和position提供http访问能力
+  ssAsyncHttpRequestReq = 0x3301;
+  ssAsyncHttpRequestRes = 0x4301;
+
+  // 获取用户的登录信息
+  ssGetLoginUserInfoReq = 0x3302;
+  ssGetLoginUserInfoRes = 0x4302;
+
+  // 兼容及Robot的用户登录
+  ssDoRobotUserLoginReq = 0x3303;
+  ssDoRobotUserLoginRes = 0x4303;
+
+  // 埋点数据上报
+  ssTraceReportReq = 0x3304;
+  ssTraceReportRes = 0x4304;
+
+  // 捏脸数据上传
+  ssUploadRoleFaceReq = 0x3305;
+  ssUploadRoleFaceRes = 0x4305;
+
+  /******************************* Recovery server *******************************/
+
+  // 创建恢复
+  ssCreateRecoveryReq = 0x3401;
+  ssCreateRecoveryRes = 0x4401;
+
+  // 加载一个恢复
+  ssLoadRecoveryReq = 0x3402;
+  ssLoadRecoveryRes = 0x4402;
+
+  // 丢弃恢复
+  ssDiscardRecoveryReq = 0x3403;
+  ssDiscardRecoveryRes = 0x4403;
+
+  // 保存恢复对象
+  ssSaveRecoveryObjectReq = 0x3404;
+  ssSaveRecoveryObjectRes = 0x4404;
+
+  /******************************* Robot server *******************************/
+
+  // 添加机器人
+  ssAddRobotReq = 0x3405;
+  ssAddRobotRes = 0x4405;
+
+  // 删除机器人
+  ssDelRobotReq = 0x3406;
+  ssDelRobotRes = 0x4406;
+
+  // 内部删除机器人 不会在集群内转发
+  ssDelRobotInnerReq = 0x3407;
+  ssDelRobotInnerRes = 0x4407;
+
+  /******************************* Nearby server *******************************/
+
+  // 同步对象状态
+  ssSyncNearbyObjectReq = 0x3501;
+  ssSyncNearbyObjectRes = 0x4501;
+
+  // 删除nearby对象
+  ssDelNearbyObjectReq = 0x3502;
+  ssDelNearbyObjectRes = 0x4502;
+
+  // 将一个对象放置到nearby服务上，此消息由nearby服务之间的协议
+  ssPutNearbyObjectReq = 0x3503;
+  ssPutNearbyObjectRes = 0x4503;
+
+  // 重叠格子数据同步
+  ssOverlapCellSyncReq = 0x3504;
+  ssOverlapCellSyncRes = 0x4504;
+
+  // 创建地块
+  ssCreateImageReq = 0x3505;
+  ssCreateImageRes = 0x4505;
+
+  // to server nearby
+  ssNearbyUpd = 0x3506;
+
+  // nearby 转发协议
+  ssNearbyForwardReq = 0x3507;
+  ssNearbyForwardRes = 0x4507;
+
+  // nearby之间的转发协议
+  ssNearbyForwardInnerReq = 0x3508;
+  ssNearbyForwardInnerRes = 0x4508;
+
+  // nearby可见列表同步
+  ssSyncNearbySeeListUpd = 0x3509;
+
+  // nearby预创建对象
+  ssPrePutNearbyObjectReq = 0x350A;
+  ssPrePutNearbyObjectRes = 0x450A;
+
+  // nearby image改变通知
+  ssImageChgUpd = 0x350B;
+
+  /******************************* scene server *******************************/
+
+  // 进入场景
+  ssEnterSceneReq = 0x3601;
+  ssEnterSceneRes = 0x4601;
+
+  // 离开场景
+  ssLeaveSceneReq = 0x3602;
+  ssLeaveSceneRes = 0x4602;
+
+  // 生成副本
+  ssGenerateCopyReq = 0x3605;
+  ssGenerateCopyRes = 0x4605;
+
+  // 销毁副本
+  ssDestroyCopyReq = 0x3606;
+  ssDestroyCopyRes = 0x4606;
+
+  /******************************* Message Server *******************************/
+
+  // 添加频道
+  ssAddChannelReq = 0x3E01;
+  ssAddChannelRes = 0x4E01;
+
+  // 删除频道
+  ssDeleteChannelReq = 0x3E02;
+  ssDeleteChannelRes = 0x4E02;
+
+  // 更新频道
+  ssUpdateChannelReq = 0x3E03;
+  ssUpdateChannelRes = 0x4E03;
+
+  // 查询频道
+  ssQueryChannelReq = 0x3E04;
+  ssQueryChannelRes = 0x4E04;
+
+  // 查询频道
+  ssQueryChannelListReq = 0x3E05;
+  ssQueryChannelListRes = 0x4E05;
+
+  // 添加用户到消息频道
+  ssAddUserToChannelReq = 0x3E06;
+  ssAddUserToChannelRes = 0x4E06;
+
+  // 移除用户到消息频道
+  ssRemoveUserFromChannelReq = 0x3E07;
+  ssRemoveUserFromChannelRes = 0x4E07;
+
+  // 推送消息（双向）
+  ssPushChatMessageReq = 0x3E08;
+  ssPushChatMessageRes = 0x4E08;
+
+  // 生成 Message Server Token
+  ssCreateUserTokenReq = 0x3E09;
+  ssCreateUserTokenRes = 0x4E09;
+
+  // 设置用户禁言
+  ssSetUserNoSpeakingReq = 0x3E0A;
+  ssSetUserNoSpeakingRes = 0x4E0A;
+
+  // 取消用户禁言
+  ssSetUserSpeakingReq = 0x3E0B;
+  ssSetUserSpeakingRes = 0x4E0B;
+
+  // 用户上线通知
+  ssUserOnlineNotificationReq = 0x3E0C;
+  ssUserOnlineNotificationRes = 0x4E0C;
+
+  // 用户下线通知 User offline notification
+  ssUserOfflineNotificationReq = 0x3E0D;
+  ssUserOfflineNotificationRes = 0x4E0D;
+
+  // 内部 Change 通知
+  ssMessageChangeNotificationUpd = 0x3E0E;
+
+  // 私聊消息发送失败后转发消息至Message服务器
+  ssSaveUserOfflineChatMessageUpd = 0x3E0F;
+
+  // 查询用户频道数量或列表
+  ssQueryUserChannelReq = 0x3E11;
+  ssQueryUserChannelRes = 0x4E11;
+
+  // 查询频道用户数量或列表
+  ssQueryChannelUserReq = 0x3E12;
+  ssQueryChannelUserRes = 0x4E12;
+
+  // 查询消息服务在线用户数量或列表
+  ssQueryMessageOnlineUserReq = 0x3E13;
+  ssQueryMessageOnlineUserRes = 0x4E13;
+}
+
+// 错误码
+// 一般是回应协议里面包含 公共的错误码 0-1000 服务器的1001到30000 客户端的30001到60000
+enum EnumErrorCode
+{
+  Success            = 0; // 正常
+  Protobuff_Err      = 1; //协议解析失败
+  SvrNoReady         = 2; //服务器没有准备好
+  Connect_Err        = 3; //账号连接信息找不到
+  Exception_Err      = 4; //异常错误
+  Back_Protobuff_Err = 5; //回包时 版本转换协议解析失败
+  UserEntering       = 6; //用户正在进入（同一帐号同时登录时，可能会返回的错误）
+  NotEnterWorld      = 7; //还未进入世界
+  Unknown            = 8; //未知错误 // TODO 去掉
+  ServerAssert       = 9; // 服务器不该出现的错误
+  ServerNetworkMsg   = 10; // 服务器之间网络收发消息错误
+  Lua_NotSupport     = 11; // 尚未支持，一般未实现对应功能
+  Deprecated         = 12; // 已废弃的接口
+  ServerStopping     = 13; // 服务器正在关闭
+
+  Login_HasOnline                 = 1001; //账号登录中
+  Login_NameTooLong               = 1002; //账号名过长
+  Login_Bduss_Err                 = 1003; //Passport登录失败
+  Login_Forbid                    = 1004; //禁止登录
+  Login_PassErr                   = 1005; //登录密码错误
+  Login_CommonError               = 1006; //登录异常错误
+  Login_UserName                  = 1007; //用户名非法
+  Check_Version_E                 = 1008; //版本检测异常
+  NO_PASSPORT_LOGIN               = 1009; //正式环境只支持PASSPORT登录
+  DB_Err_Connect                  = 1010; //连接数据库失败
+  DB_Err_Select                   = 1011; //数据库查询失败
+  DB_Err_Operation                = 1012; //数据库操作失败
+  Login_DENY_IP                   = 1013; //ip禁止登录
+  Login_DENY_USERID               = 1014; //用户禁止登录
+  Login_DENY_HWID                 = 1015; //设备禁止登录
+  NotFoundStaticID                = 1016; //未找到StaticID
+  NotFoundItemObj                 = 1017; //未找到ItemObj
+  PropertyValueParse              = 1018; //属性解析错误
+  GenPersistenceIDErr             = 1019; // 生成唯一id失败
+  Char_Add_NameErr                = 1020; //角色名不合法
+  Char_Add_NameRepeat             = 1021; //角色名重复
+  Char_Add_NumLmt                 = 1022; //角色数量超上限
+  Char_Add_SexErr                 = 1023; //角色性别错误
+  Char_Add_StaticErr              = 1024; //角色StaticId错误
+  Char_Add_UserErr                = 1025; //账号ID错误
+  FACE_TO_LONG                    = 1026; //捏脸数据过长
+  EQUIPTMENT_LONG_ERR             = 1027; //时装 眼镜数据长度异常
+  HAS_ROLE_ENTER_GAME             = 1028; //账号有角色处于游戏中
+  Login_CheckPassPort             = 1029; //登录PassPort异常错误
+  User_No_Logined                 = 1030; //账号不是登录完成阶段
+  Char_NotExist                   = 1031; //角色不存在
+  Char_EnterRepeat                = 1032; //重复登录
+  World_NotExist                  = 1033; //世界不存在
+  GET_FACE_ERR                    = 1034; //获取捏脸数据失败
+  USER_NAME_LONG_ERR              = 1035; //角色名长度不对
+  USER_NAME_ERR                   = 1036; //角色名不合法
+  NAME_BEFORE_NOCHECK             = 1037; //角色名没有提前检测敏感词
+  NAME_CHECK_ERR                  = 1038; //角色名检测敏感词不合规
+  CacheDeleteErr                  = 1039; //从cache删除对象失败
+  Player_NoFind                   = 1040; //查找玩家失败
+  Interaction_CmdErr              = 1041; //交互协议命令处理异常
+  HasOnline                       = 1042; //角色登录中
+  CharIdError                     = 1043; //角色ID错误
+  NoMoreItem                      = 1044; //没有更多的项了（一般用于分页的请求）
+  SrvNotFound                     = 1045; //服务器未找到
+  FilterText                      = 1046; //文本中包含敏感词
+  NotAvailableSrv                 = 1047; //没有可用的服务器
+  NoFindNpcRefID                  = 1048; //没有找到npc的刷新信息
+  OwnerHasPick                    = 1049; //重复拾取
+  CanNotPick                      = 1050; //npc不可以被拾取
+  CacheSaveEmpty                  = 1051; //保存一个cache对象时，无法在cache中找到此对象
+  CacheCreateExisted              = 1052; //创建一个cache对象时，对象已经存在
+  CacheNotExisted                 = 1053; //从cache读取对象时，对象不存在
+  CacheCloseSaving                = 1054; //保存或读取对象时，对象正在被closesave
+  ServerTooBusy                   = 1055; //服务器过于繁忙
+  NotFoundGameObject              = 1056; //未找到GameObject
+  GameObjectAlreadyExisted        = 1057;  //GameObject已存在
+  InvalidSession                  = 1058; // 无效的proxy session
+  InvalidToken                    = 1059; // 无效的token
+  SrvFull                         = 1060; // 服务器已满，无法提供服务
+  NetLockInUsing                  = 1061; // 网络锁已被占用
+  NotFoundBlockImage              = 1062; // 地块镜像未找到
+  BlockImageFull                  = 1063; // 地块镜像已满
+  FriendApplyNotExisted           = 1064; // 好友申请不存在
+  RoleNotExisted                  = 1065; // 角色不存在
+  AlreadyFriends                  = 1066; // 已经是好友
+  FriendNotExisted                = 1067; // 好友不存在
+  ItemNumNotEnough                = 1068; // 物品数量不足
+  PackSpaceNotEnough              = 1069; // 背包空间不足
+  MoneyNumNotEnough               = 1070; // 金钱数量不足
+  InvalidParam                    = 1071; // 请求参数错误
+  RedisException                  = 1072; // redis执行异常
+  RedisBadData                    = 1073; // redis数据错误，人为误修改了redis数据？
+  PhoneRoomUserLimit              = 1074; // 单个电话房间人数超上限了
+  PhoneRoomNumLimit               = 1075; // 电话房间总数超上限了
+  PhoneAlreadyInRoom              = 1076; // 用户已经电话中，无法继续发起新的通话
+  PhoneRoomNotExist               = 1077; // 房间已不存在
+  PhoneRoomIllegalAccess          = 1078; // 房间非法，该房间都没邀请这个角色
+  AreaNotFind                     = 1079; // 区域没有找到
+  AreaNoHaveVarMgr                = 1080; // 区域没有属性管理器
+  AreaReadVarErr                  = 1081; // 区域读取属性失败
+  ScriptVarMsgErr                 = 1082; // 属性信息不完成
+  ObyTypeNoFind                   = 1083; // 角色类型不存在
+  ObyTypeErr                      = 1084; // 角色类型错误
+  VoiceTypeNotSupport             = 1085; // 语音类型不支持
+  RalRequest                      = 1086; // ral请求错误
+  VoiceUserBan                    = 1087; // 语音被禁言了
+  CacheLoadErr                    = 1088; // cache加载失败
+  NotifyMsgTypeNotSupport         = 1089; // 消息通知类型不支持
+  QueueUserFullLimit              = 1090; // 排队人数已到上限
+  HttpRequestCreate               = 1091; // 创建http请求体错误
+  HttpDoRequest                   = 1092; // 执行http请求错误
+  HttpResponseStatus              = 1093; // 返回http非200错误
+  HttpResponseJsonParse           = 1094; // 返回http的body解析json失败
+  HttpResponseLogicCode           = 1095; // 返回http逻辑code错误
+  HttpResponseLogicData           = 1096; // 返回http逻辑数据错误
+  RecoveryAlreadyExisted          = 1097; // recovery已经存在
+  RecoveryNotExisted              = 1098; // recovery不存在
+  PhoneRoleNotExisted             = 1099; // A给B打电话时，B已下线
+  Reg_Pos_Out_Of_Range            = 1100; // 向position server注册失败：位置超出范围
+  Unsupported_Obj                 = 1101; // 不支持的对象，具体含义跟使用场景关联
+  Reg_Pos_Obj_Exists              = 1102; // 向position server注册失败：对象已经存在
+  Cell_Not_Exists                 = 1103; // 向position server注册失败：cell不存在
+  Block_Img_Exists                = 1104; // 镜像已存在
+  Block_Img_Init_Failed           = 1105; // 镜像初始化失败
+  Msg_Res_Timeout                 = 1106; // 消息回应超时
+  Server_ID_Is_Zero               = 1107; // 服务ID为0
+  Invalid_IP_Address              = 1108; // IP地址无效
+  Server_Connect_Failed           = 1109; // 服务器连接失败
+  Space_Not_Exists                = 1110; // 空间不存在
+  Conn_ID_Is_Zero                 = 1111; // 连接ID为0
+  Static_Npc_Not_Exists           = 1112; // 静态NPC信息不存在
+  Object_Load_Cache_Failed        = 1113; // 游戏对象加载cache失败
+  Load_Cache_Zero                 = 1114; // 加载cache条数为0
+  ServerConfigError               = 1115; // 服务配置错误
+  HttpResponseError               = 1116; // http响应错误
+  LeaveScnPosUnInit               = 1117; // 离开场景坐标没有初始化
+  TransferDistanceErr             = 1118; // 传送时检测距离失败
+  TransferParamsErr               = 1119; // 传送检测参数数量错误
+  GetCurSpaceErr                  = 1120; // 获取当前空间错误
+  InteractionParamErr             = 1121; // 交互参数错误
+  ClientCmdTypeErr                = 1122; // 客户端交互类型错误
+  RiskControl                     = 1123; // 命中风控
+  GlobalVarListEmpty              = 1124; // GlobalVar LIST POP时，已经没有元素
+  CollectActionParamsErr          = 1125; // 采集参数错误
+  CollectTryCollect               = 1126; // 采集失败
+  AddItemFail                     = 1127; // 添加物品失败
+  ChgMoneyFail                    = 1128; // 修改金钱失败
+  PhoneRoleIsBusy                 = 1129; // A给B打电话时，B在通话中
+  TokenTimeout                    = 1130; // mysql连接错误
+  MysqlConnect                    = 1131; // mysql连接错误
+  MysqlQuery                      = 1132; // mysql查询错误
+  MysqlExecute                    = 1133; // mysql执行错误
+  NetLockFail                     = 1134; // 网络锁错误
+  LoadObjectPropertyFail          = 1135; // 获取Object属性错误
+  SaveObjectPropertyFail          = 1136; // 设置Object属性错误
+  NoFindObj                       = 1140; // 没有找到对象
+  GetSeatErr                      = 1141; // 获取位置信息错误
+  SetSeatErr                      = 1142; // 设置位置信息错误
+  CollectMax                      = 1143; // 您采集的贝壳已达上限，请去别处逛逛吧！
+  Trigger_Time_Err                = 1144; // 触发时间异常
+  Space_Not_Walk                  = 1145; // 空间不能行走
+  GlobalVarHashKeyNotExisted      = 1146; // GlobalVar HASH get键值不存在
+  GetLoginUserInfoFail            = 1147; // proxy获取登录数据失败
+  CreateRoleLimit                 = 1148;
+  LoadObjectFromCacheFail         = 1149; // 从Cache中Load数据失败
+  SaveObjectToCacheFail           = 1150; // 保存数据到Cache中
+  StaticDataErr_WorldList         = 1151; // 获取World的static数据错误
+  StaticDataErr_SpaceList         = 1152; // 获取Space的static数据错误
+  LeaveWorldDuplication           = 1153; // 已经离开世界了
+  LeaveWorldFail                  = 1154; // 离开世界错误
+  QueryOnlineUserFail             = 1155; // 查询在线用户错误
+  QueueUserDuplication            = 1156; // 用户重复排队
+  NotAllowProxyLogin              = 1157; // proxy登录不支持
+  UserBusy                        = 1158; // 用户忙
+  Invalid_SrvType                 = 1159; // 非法的服务类型
+  ItemMgrErr                      = 1160; // 物品系统异常
+  ItemNoFind                      = 1161; // 物品没找到
+  FriendRequestListLimit          = 1162; // 对方好友申请列表已满
+  FriendSrcListLimit              = 1163; // 自己好友列表已满
+  FriendDestListLimit             = 1164; // 对方好友列表已满
+  Trigger_Not_Allow               = 1165; // 触发不被允许
+  SrvConfigNotExisted             = 1166; // 服务配置不存在
+  CacheRawCreateObjFromMsg        = 1167; // 通过msg创建原始cache object错误
+  CacheRawCreateObjFromType       = 1168; // 通过type创建原始cache object错误
+  CacheRawCheckErr                = 1169; // 检查原始cache 参数错误
+  CacheRawGetKeyErr               = 1170; // 获取原始cache key错误
+  CacheRawMysqlQueryErr           = 1171; // 获取原始cache mysql查询错误
+  CacheRawMysqlQueryEmpty         = 1172; // 获取原始cache mysql查询错误
+  CacheRawMysqlLoadErr            = 1173; // 获取原始cache mysql查询后load错误
+  CacheRawMysqlCopyNewErr         = 1174; // 获取原始cache mysql查询后copy错误
+  CacheRawGetObjFromRedis         = 1175; // 原始cache中从redis获取obj错误
+  CacheRawDelObjFromRedis         = 1176; // 原始cache中从redis删除obj错误
+  CacheRawObjMergeErr             = 1177; // 原始cache中merge obj错误
+  Cache_Create_Failed             = 1178; // 创建cache失败
+  Cache_Save_Failed               = 1179; // 保存cache失败
+  Cache_Load_Failed               = 1180; // 加载cache失败
+  Cache_Delete_Failed             = 1181; // 删除cache失败
+  CacheRawDBDelReplaceObj         = 1182; // 原始cache中删除替换db obj
+  CacheRawCreateRepeat            = 1183; // 重复创建
+  DeleteObjectToCacheFail         = 1184; // 删除数据到Cache中
+  ServerMigrating                 = 1185; // 迁移：服务正在迁移中，无法提供服务
+  MigrationObjectExists           = 1186; // 迁移：对象已存在
+  CreateObjFromRecoveryErr        = 1187; // 从recovery数据创建对象遇错
+  GameObjectIsNotFull             = 1188; // 对象不是一个全量数据对象
+  GameObjectIsFull                = 1189; // 对象不是一个增量数据对象
+  GameObjectIncVerFail            = 1190; // 合并对象时数据版本检查失败
+  StaticDataErr                   = 1191; // 静态数据错误
+  AcceptTaskErr                   = 1192; // 接取任务失败
+  CommitTaskErr                   = 1193; // 提交任务失败
+  NoFindTask                      = 1194; // 没找到任务
+  TaskStatusErr                   = 1195; // 任务状态错误
+  GameObjectInOtherSrv            = 1196; // 对象在其他服务上（param中返回新服务的ID）
+  GameObjectInTransfer            = 1197; // 对象正在迁移中
+  ItemNumMoreMax                  = 1198; // 物品数量超上限
+  ItemCanNotUse                   = 1199; // 物品不可以使用
+  TaskActivityTimeLimit           = 1200; // 任务活动时间限制
+  NotFindTaskActivity             = 1201; // 没找到活动
+  ItemEquipGender                 = 1202; // 装备体型限制
+  TaskActivityStatus              = 1203; // 活动状态不对
+  TaskActivityTaskDoing           = 1204; // 提交任务时不是当前活动正在进行的任务
+  MeetingPlayerMax                = 1205; // 大会人数已达上限
+  CreateSceneObjFailed            = 1206; // 创建场景对象失败
+  SceneStaticIDMismatch           = 1207; // 场景静态ID不匹配(参数和存档不匹配)
+  PackedToCacheFailed             = 1208; // 打包到cache失败
+  FetchCacheFailed                = 1209; // 拉取远程cache数据失败
+  MeetingDuplicateTakeSeat        = 1210; // 已经有座位，又重复申请座位
+  MeetingEmceeTakeSeat            = 1211; // 主持人申请了入座，正常不允许
+  MeetingUnavailableSeat          = 1212; // 不可用的座位，比如普通用户不可占用嘉宾座位
+  MeetingAlreadyTakeSeat          = 1213; // 已经有人占用，不可重复占用
+  MeetingGuest1v1Seat             = 1214; // 有绑定座位关系，无法占用其他座位
+  MeetingSeatFull                 = 1215; // 满员了，无法分配座位
+  Trigger_Not_Allow_Item          = 1216; // 无门票道具
+  Small_Meeting_Host              = 1217; // 主持人不在
+  Small_Meeting_Not_Host          = 1218; // 您不是主持人
+  WalkSeatLimit                   = 1219; // 在座位上，不允许行走
+  FriendReqFrozen                 = 1220; // 好友请求冻结中，发送好友请求有3天冷却时间
+  Small_Meeting_Host_Forbid_Enter = 1221; // 您被主持人踢出，禁止二次进场
+  MessageChannelExisted           = 1222; // 消息频道（Channel ID）已经存在，不可重复创建
+  MessageChannelNotExisted        = 1223; // 消息频道（Channel ID）不存在
+  MessageUserAlreadyInChannel     = 1224; // 用户已经在消息频道（Channel ID）
+  MessageUserNotExisted           = 1225; // 用户不存在
+  MessageUserAlreadyExisted       = 1226; // 用户已存在
+  MessageUserNotInChannel         = 1227; // 用户不在消息频道（Channel ID）
+  MessageUserAlreadyNoSpeaking    = 1228; // 用户已经禁言
+  MessageUserAlreadySpeaking      = 1229; // 用户禁言已经解除
+  MessageChatIdNotExisted         = 1230; // 消息不存在或者已阅
+  MessageChatEmpty                = 1231; // 消息空
+  MessageChatInvalidType          = 1232; // 不合法消息类型
+  MessageChatInvalidFromType      = 1233; // 不合法消息来源类型
+  MessageNotSupport               = 1234; // 不支持消息功能
+  FriendReqOvertime               = 1235; // 好友申请过期，申请期限默认是7天
+  SceneClosed                     = 1236; // 场景已关闭
+  EnterSpaceAppIDLimit            = 1237; // 进入空间appid限制
+  BOSNewClient                    = 1238; // 创建BOS客户端错误
+  BOSCredentials                  = 1239; // BOSSession设置错误
+  BOSPutFile                      = 1240; // BOS上传文件错误
+  BOSGetFile                      = 1241; // BOS获取文件错误
+  BOSDelFile                      = 1242; // BOS删除文件错误
+  StaticDataNotFound              = 1243; // 静态数据未配置
+  NotFoundRoleConfig              = 1244; // 角色身上没有找到对应配置
+  RoleConfigFriendDisableAdd      = 1245; // 角色配置之禁止添加好友
+  RoleConfigValMaxSizeLimit       = 1246; // 角色配置长度超过最大设置
+  MessageFrequencyWarning         = 1247; // 消息发送频率过高警告
+
+  // 以下是web api使用
+  Web_Unknown                = 20000; // 未知错误，一般是后台未处理报错时出现
+  Web_HTTPBodyEmpty          = 20001; // HTTP包体为空
+  Web_HTTPCookieEmpty        = 20002; // HTTP的Cookie为空
+  Web_JsonEncode             = 20003; // json序列化失败
+  Web_JsonDecode             = 20004; // json解析失败
+  Web_SchemaDecode           = 20005; // URL schema解析失败
+  Web_ValidateRule           = 20006; // validator验证返回错误
+  Web_NotFoundUserInfo       = 20007; // 用户数据未找到
+  Web_InvalidRoleId          = 20008; // 角色id非法
+  Web_DataTypeConvert        = 20009; // 数据转换错误
+  Web_NotFound               = 20010; // 逻辑数据未找到
+  Web_IllegalAccess          = 20011; // 非法访问
+  Web_UnsharedPhoto          = 20012; // 未分享的照片
+  Web_Mysql                  = 20013; // mysql执行错误
+  Web_Redis                  = 20014; // redis执行错误
+  Web_WorldId                = 20015; // WorldId错误
+  Web_AppEndpointId          = 20016; // 非法App端ID
+  Web_AppChannelId           = 20017; // 非法App渠道ID
+  Web_AppVersion             = 20018; // 非法App版本
+  Web_NewestAppVersion       = 20019; // 最新App版本配置错误
+  Web_DenyIP                 = 20020; // IP限制
+  Web_DenyHardwareId         = 20021; // 硬件ID限制
+  Web_NotAllow               = 20022; // 禁止访问
+  Web_RalRequest             = 20023; // ral请求错误
+  Web_RalResponseCode        = 20024; // ral请求返回的错误码
+  Web_RalResponseLogic       = 20025; // ral请求返回的逻辑错误
+  Web_DBUpdateFail           = 20026; // DB更新失败
+  Web_DBNoUpdateRow          = 20027; // DB数据无更新
+  Web_BOSNewClient           = 20028; // 创建BOS客户端错误
+  Web_BOSSession             = 20029; // BOSSession设置错误
+  Web_BOSUpload              = 20030; // BOS上传文件错误
+  Web_BOSGetFile             = 20031; // BOS获取文件错误
+  Web_UploadFileLimit        = 20032; // 上传文件时配置限制
+  Web_CopyFile               = 20033; // Copy文件错误
+  Web_ImagickDeal            = 20034; // imagick 处理错误
+  Web_ImageFormatLimit       = 20035; // 上传图片格式错误
+  Web_BadUrlParamKey         = 20036; // URL请求key错误
+  Web_ProductNotExists       = 20037; // 商品不存在
+  Web_ProductOutOfStock      = 20038; // 库存不足
+  Web_OrderNotExists         = 20039; // 订单不存在
+  Web_BeiNotEnough           = 20040; // 贝壳币不足
+  Web_PayBeiFailed           = 20041; // 贝壳币支付失败
+  Web_BOSDelete              = 20042; // BOS删除错误
+  Web_MysqlDataUnique        = 20043; // Mysql数据有重复
+  Web_ProjectStatusLimit     = 20044; // 项目状态不对
+  Web_BOSListFile            = 20045; // BOS获取文件错误
+  Web_FileType               = 20046; // 文件类型错误
+  Web_Base64Encode           = 20047; // base64加密错误
+  Web_Base64Decode           = 20048; // base64解密错误
+  Web_LoginTokenGen          = 20049; // 登录token生成错误
+  Web_BOSCopy                = 20050; // BOS上传文件错误
+  Web_MysqlInsertNone        = 20051; // Mysql插入影响行数为0
+  Web_MysqlUpdateNone        = 20052; // Mysql更新影响行数为0
+  Web_NotSupport             = 20053; // 尚未支持，一般未实现对应功能
+  Web_NetInvalid             = 20054; // 网络错误
+  Web_RalTimeout             = 20055; // Ral超时
+  Web_UserLoginCancel        = 20056; // 登录时用户已注销
+  Web_UserLoginBan           = 20057; // 登录时用户被封禁
+  Web_OauthInvalidGrantType  = 20058; // oauth不支持的授权类型
+  Web_OauthInvalidClientInfo = 20059; // oauth中clientId或clientSecret错误
+  Web_OauthInvalidToken      = 20060; // oauth中Token校验失败
+  Web_OauthTokenExpire       = 20061; // oauth中Token过期
+  Web_OauthTokenScope        = 20062; // oauth中Scope不支持
+  Web_RTCNewClient           = 20063; // 创建RTC客户端错误
+  Web_RTCExecute             = 20064; // RTC执行错误
+  Web_ReturnBeiFailed        = 20065; // 贝壳币添加失败
+  Web_MysqlEmpty             = 20066; // 包管理数据为空,load数据失败
+  Web_XdCouponErr            = 20067; // 小度发券失败
+  Web_XdCouponLimit          = 20068; // 小度领券量达到上限
+  Web_VrConvertErr           = 20069; // vr_account_id 转 pass id失败
+  Web_LoginDisable           = 20070; // 登录未开放
+  Web_BadVcrClient           = 20071; // vcr创建client失败
+  Web_VcrExecError           = 20072; // vcr执行错误
+  Web_UserLoginForbidden     = 20073; // 登录时用户被禁用
+  Web_UserLoginWarning       = 20074; // 登录时用户被警告
+  Web_BCESTSNewClient        = 20075; // 创建BCE STS客户端错误
+  Web_BCESTSSession          = 20076; // BCE STS session错误
+}
+
+// 服务器类型
+enum EnumServerType
+{
+  EnumServerTypeNone = 0;
+
+  ProxyServer = 1;      // 代理服务器
+  WorldServer = 2;      // 世界服务器
+  PositionServer = 3;   // 位置服务器
+  GLSrvManager = 4;     // 服务器管理
+  GLNpcManager = 5;     // NPC管理
+  GLObjectManager = 6;  // 对象管理
+  GLMapManager = 7;     // 地图管理
+  GLCache = 8;          // 缓存
+  GLChat = 9;           // 消息管理
+  GLTerminal = 10;      // 终端服务，后端内核对外的总接口
+  QueueServer = 11;     // 排队服务器
+  SocializeServer = 12; // 社交服务器
+  GLVoice = 13;         // 语音服务器
+  GLAreaManager = 14;   // 区域管理服务器
+  GLRecoveryServer = 15;// 恢复服务器
+  GLRobotServer = 16;  // 机器人服务器
+  GLNearbyServer = 17; // Nearby服务器
+  GLSceneServer = 18;   // 场景服务器
+  MessageServer = 19;   // 消息服务器
+}
+
+// 机器人类型
+enum EnumRobotType
+{
+  EnumRobotTypeNone = 0;
+  Random = 1;             // 随机游走机器人
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// TCP封包格式说明
+////////////////////////////////////////////////////////////////////////////////
+//
+// 传输层数据包头
+//typedef struct St_PacketTransHeader
+//{
+//    UINT32 wPacketLength; // 包的长度（包含本数据包头)
+//    union
+//    {
+//        UINT32 wPacketFlag;
+//        struct
+//        {
+//            UINT32 wPacketType:8; // 0未知协议 1: 单个包，2: 多用户复合包, 3: protobuf 单包 4: protobuf多包
+//            UINT32 wEncodeMode:8; // 编码方式: 目前为0
+//            UINT32 wVersion:8; // 协议版本：目前为1
+//            UINT32 wResvered:8; // 目前是10
+//        };
+//    };
+//    UINT32 wPacketOrgLength; // 包的(编码的原始长度，不包含本数据包头长度)
+//} St_PacketTransHeader;
+//
+
+// 服务端消息追踪 V1
+message MsgTrace
+{
+  message MsgTraceItem // TODO
+  {
+    uint64 serverId = 1; // 处理的服务器ID
+    EnumServerType serverType = 2; // 处理的服务器类型
+    uint64 timeStampMS = 3; // 时间戳 毫秒
+  }
+  uint64 traceId = 1; // 追踪ID
+  uint64 startTimeStampMS = 2; // 起点时间戳 毫秒
+  repeated MsgTraceItem items = 3; // 追踪记录
+}
+
+message MsgCmd
+{
+  //命令包头
+  message MsgCmdHeader
+  {
+    message ServerHeader
+    {
+      uint64 bdUserId = 1; // 百度账号ID
+      string clientIP = 2; // 客户端IP
+      GameObject.EnumAppEndpoint appEndpoint = 3;
+      repeated GameObject.MsgGameObjectId arrObjIds = 4; // 服务器内部转发时，多个接收对象列表
+      string appId = 5;
+    }
+    EnumCmdCode cmd = 1; // 命令id
+    EnumErrorCode errCode = 2; // 错误码，一般是回应协议里面包含 公共的错误码 0-1000 服务器的1001到30000 客户端的30001到60000
+    uint64 param = 3; // cmd的含义不同而不同
+    uint32 sn = 4; // 包序号，由发起方产生，回应协议里面返回
+    uint64 timeStamp = 5; // time stamp 毫秒
+    uint32 protobufVersion = 6;// 逻辑协议版本号 只需要CSMsgLoginReq添加 最新版本号1对应包体使用bytes msgbyBody
+    reserved 7 to 8; // 保留扩展字段
+    ServerHeader srvHeader = 9; // 服务器专用
+    uint64 userId = 10; // 用户id
+    uint64 srvId = 11; // srv id	server only, client not need
+    uint64 fwRouteID = 12; // fwRouteID id		 server only , client not need
+    optional uint64 roleId = 13;  // 角色ID，只在服务器之间的传递有用，proxy上进行设置
+    optional MsgTrace trace = 14; // 消息追踪信息，目前服务器专用
+    repeated uint64 arrRoleIds = 15; // 此包同时发送给多个客户端
+  }
+
+  MsgCmdHeader msgHeader = 1;
+  google.protobuf.Any msgBody = 2 [deprecated = true];
+  bytes msgbyBody = 3;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// 客户端协议定义
+////////////////////////////////////////////////////////////////////////////////
+
+// csLoginReq
+/************* 登录 *************/
+message CSMsgLoginReq
+{
+  // 登录类型
+  enum EnumLoginType
+  {
+    // 普通登录，仅供测试使用，正式对外环境无效
+    Normal = 0;
+    // 废弃
+    BaiduOpenAuth = 1;
+    // 正式登录方式
+    BaiduPassport = 2;
+  }
+  message MsgNormalInfo
+  {
+    // 用户名，长度小于64字节
+    string userName = 1;
+    // 密码，长度小于64字节
+    string passWord = 2;
+  }
+  // 废弃
+  message MsgBaiduOpenAuthInfo
+  {
+    //长度小于64字节
+    string openId = 1;
+    //长度小于64字节
+    string token = 2;
+  }
+  message MsgBaiduPassport
+  {
+    // vr_account_id，长度小于64字节
+    string vrUserId = 1;
+    //长度小于1024字节
+    string token = 2;
+  }
+  // 登录类型
+  EnumLoginType eLoginType = 1;
+  // ID地址，长度小于64字节，客户端不需要填
+  string strIP = 2;
+  // 普通登录信息，若登录类型填写普通登录，需要填写此字段
+  MsgNormalInfo msgNormalInfo = 3;
+  // 废弃
+  MsgBaiduOpenAuthInfo msgBaiduOpenAuthInfo = 4;
+  // 正式登录信息，若登录类型填写正式登录，需要填写此字段
+  MsgBaiduPassport msgBaiduPassport = 5;
+  // 客户端类型，客户端单独使用，解释权归客户端所有
+  uint32 cliType = 6;
+  //长度小于128 客户端硬件ID 唯一
+  string strHardware = 7;
+  // 长度小于64字节 客户端版本号 版本校验使用
+  string strVersion = 8;
+  // 机型 版本校验使用
+  uint32 versionCliType = 9;
+  // 渠道 版本校验使用
+  uint32 versionChannelType = 10;
+  // 设备 版本校验使用
+  string versionEquipType = 11 [deprecated = true];
+}
+
+// scLoginRes
+message CSMsgLoginRes
+{
+  // 用户ID
+  uint64 nUserId = 1;
+  // 上次登录时间戳
+  uint32 nLastLoginOnTime = 2;
+  // 上次登出时间戳
+  uint32 nLastLoginOffTime = 3;
+  // 上次登录IP地址
+  string nLastLoginIp = 4;
+  // 是否首次登录
+  bool bfirst = 5;
+  optional uint64 nSessionID = 6;
+}
+
+/************* 角色列表 *************/
+// csRoleListReq
+message CSRoleListReq
+{
+}
+
+// scRoleListRes
+message SCRoleListRes
+{
+  // 注意在返回的角色列表中，只打包了在此阶段需要的信息
+  repeated GameObject.MsgPlayer arrPlayerList = 1;
+  // 模型配置
+  string modelConfig = 2;
+}
+
+/************* 创建角色 *************/
+// csCreateRoleReq
+message CSCreateRoleReq
+{
+  // 角色名称  长度小于64字节
+  string strName = 1;
+  // 角色性别
+  GameObject.EnumGameObjectGender eGender = 2;
+  // 模型id，客户端用 （机器人测试时可不填）
+  uint64 staticId = 3;
+  // 捏脸数据 模型ID
+  optional uint32 faceModeId = 4;
+  // 捏脸数据 小于10240字节
+  optional bytes faces = 5;
+  // 衣服 眼镜等 小于512
+  optional string equipment = 6;
+  // 风控参数
+  GameObject.MsgRisk msgRisk = 7;
+}
+
+// scCreateRoleRes
+message SCCreateRoleRes
+{
+  uint64 roleid = 1;
+}
+
+/************* 世界列表 *************/
+// csWorldListReq
+message CSWorldListReq
+{
+
+}
+
+// scWorldListRes
+message SCWorldListRes
+{
+  // 注意在返回的世界列表中，只打包了在此阶段需要的信息
+  repeated GameObject.MsgWorld arrWorlds = 1;
+}
+
+/************* 空间列表 *************/
+// csSpaceListReq
+message CSSpaceListReq
+{
+  // 世界ID，服务端会返回此世界对应的空间列表
+  uint32 worldId = 1;
+}
+
+// scSpaceListRes
+message SCSpaceListRes
+{
+  // 空间列表
+  repeated GameObject.MsgWorldSpace arrSpaces = 1;
+}
+
+//message SCWorldListUpd
+//{
+//  // 注意在返回的世界列表中，只打包了在此阶段需要的信息
+//  repeated GameObject.MsgWorld arrWorlds = 1;
+//}
+
+/************* 进入世界 *************/
+// csEnterWorldReq
+message CSEnterWorldReq
+{
+  // 使用哪个角色进入游戏，注意不是用户ID
+  GameObject.MsgGameObjectId msgSelectedPlayerId = 1;
+  // 进入哪个世界（从服务器返回的世界列表里选择一个）
+  GameObject.MsgGameObjectId msgWorldId = 2;
+  // 进入哪个空间 0进入默认的 （从服务器返回的空间列表里选择一个）
+  uint64 spaceId = 3;
+  // 风控参数
+  GameObject.MsgRisk msgRisk = 4;
+  // 进入的副本实例id（与字段spaceId互斥）
+  uint64 copyId = 5;
+}
+
+// scEnterWorldRes
+message SCEnterWorldRes
+{
+  string face_url_prefix = 1;
+}
+
+// 进入空间通知（由服务器主动推送）
+// scEnterWorldSpaceUpd
+message SCEnterWordSpaceUpd
+{
+  // 进入的世界对象
+  GameObject.MsgWorld msgWorld = 1;
+  // 进入的空间对象
+  GameObject.MsgWorldSpace msgWorldSpace = 2;
+  // 坐标
+  GameObject.MsgVarVector3 msgPosition = 3;
+  // 用户信息
+  GameObject.MsgAnyMapObject msgPlayer = 4;
+  // 资源地址
+  string resourcesDir = 5;
+  // 资源名称
+  string resourceName = 6;
+}
+
+/************* Nearby更新，由服务器下发 *************/
+// 说明：由于使用了增量同步的机制，对象定义中的所有字段，如果没有改变过都不会进行打包
+// scNearbyUpd
+message SCMsgNearbyUpd
+{
+  // 进入视野或视野内对象更新的对象列表
+  repeated GameObject.MsgAnyMapObject arrAddOrUpdObjs = 1;
+  // 离开视野的对象列表
+  repeated GameObject.MsgGameObjectId arrDelIds = 2;
+  // 新版本打包
+  repeated bytes bytesAddOrUpdObjs = 3;
+}
+
+/************* 离开游戏（返回角色选择） *************/
+// csLeaveWorldReq
+message CSMsgLeaveWorldReq
+{
+  GameObject.MsgRisk msgRisk = 1; // 风控参数
+}
+
+// scLeaveWorldRes
+message SCMsgLeaveWorldRes
+{
+}
+
+/************* 登出 *************/
+// csLogoutReq
+message CSMsgLogoutReq
+{
+}
+
+// scLogoutRes
+message SCMsgLogoutRes
+{
+}
+
+/************* 交互命令 *************/
+// csInteractionReq
+message CSInteractionReq
+{
+  // 交互命令 长度小于256字节
+  // #switch 0/1 //1是开 ppt和视频通用
+  // #setContent xxx //ppt
+  // #next        //ppt
+  // #play n      //ppt
+  // #setvideoContent xxx //视频内容
+  // #pausevideo 0/1 //1是视频暂停
+  // #playvideo n  //视频进度
+  // #moveNpc x y z dirx diry dirz //控制NPC移动
+  // #transferself spaceId
+  // #createNpc staticId x y z dirx diry dirz
+  // #delNpc //删除的NPC对象ID
+  // #setPro speed n //属性speed
+  // #playerAnimation xxx //播放动画
+  // #pauseAnimation 0/1 //1是动画暂停
+  // #setPro Scale n //属性Scale
+  // #setOwner      //设置主人
+
+  string strCmd = 1;
+  // 交互对象ID列表（当前只支持一个对象）
+  repeated GameObject.MsgGameObjectId dstIds = 2;
+  // 风控参数
+  GameObject.MsgRisk msgRisk = 3;
+}
+
+// scInteractionRes
+message SCInteractionRes
+{
+  GameObject.MsgGameObjectId InstanceId = 1;
+  string strResponse = 2;
+}
+
+// scInteractionUpd
+message SCInteractionUpd
+{
+
+  string strCmd = 1;
+  repeated GameObject.MsgGameObjectId dstIds = 2;
+}
+
+/************* 行走命令 通知给worldserver *************/
+// csPlayerWalkReq
+message CSPlayerWalkReq
+{
+  // 玩家角色ID
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  // 玩家朝向
+  GameObject.MsgVarVector3 msgDir = 2;
+  // 玩家坐标
+  GameObject.MsgVarVector3 msgEndPos = 4;
+}
+
+// scPlayerWalkRes
+message SCPlayerWalkRes
+{
+}
+
+/************* 玩家位置广播包，由服务器广播给周边玩家 *************/
+// 注意：不推荐使用，将来下架
+// csCliPlayerWalkReq
+message CSCliPlayerWalkReq
+{
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  GameObject.MsgVarVector3 msgDir = 2;
+  GameObject.MsgVarVector3 msgStartPos = 3;
+  GameObject.MsgVarVector3 msgEndPos = 4;
+}
+
+/************* 身体部位改变位置 通知给worldserver *************/
+// csBodyPartChgPosReq
+message CSBodyPartChgPosReq
+{
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  GameObject.EnumBodyPart bodyPart = 2;
+  GameObject.MsgPosDir msgPosDir = 3;
+}
+
+// scBodyPartChgPosRes
+message SCBodyPartChgPosRes
+{
+}
+/************* 身体部位位置广播包，由服务器广播给周边玩家 *************/
+// 注意：不推荐使用，将来下架
+// csCliBodyPartChgPosReq
+message CSCliBodyPartChgPosReq
+{
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  GameObject.EnumBodyPart bodyPart = 2;
+  GameObject.MsgPosDir msgPosDir = 3;
+}
+
+/************* 身体部位和玩家位置广播包，整合了身体部位和位置广播 *************/
+// csCliComposePosUpd
+message CSCliComposePosUpd
+{
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  GameObject.MsgVarVector3 msgDir = 2;
+  GameObject.MsgVarVector3 msgEndPos = 3;
+  repeated GameObject.MsgBodyPartPosDir msgBodyPartPosDirs = 4;
+}
+
+// 客户端通过proxy进行协议广播（目前不支持）
+// csClientBroadCastReq
+message CSClientBroadCastReq
+{
+  // 需要转发的协议，经过proxy拆包，对端接受的是此协议，而不是广播协议
+  MsgCmd cmdHeader = 1;
+  // 需要转发的玩家，为空则广播
+  GameObject.MsgUserProxyInfo playerList = 2;
+}
+
+// 客户端激活，用途：进入场景/传送后，客户端读条加载场景，此时客户端不会收到nearby信息，等加载完成后通知服务器，服务器再把用户放入场景，推送nearby
+// csUserActiveReq
+message CSMsgActiveReq
+{
+}
+
+// scUserActiveRes
+message SCMsgActiveRes
+{
+}
+
+/************* 心跳包 *************/
+// csUserPingReq
+message CSMsgPingReq
+{
+  uint32 clientTime = 1;  //客户端时间 单位毫秒
+  uint32 svrTime = 2;     //上次收到心跳包回包时服务器时间单位毫秒
+}
+
+// scUserPingRes
+message SCMsgPingRes
+{
+  uint32 clientTime = 1;  //客户端发来的时间 网络延时=客户端当前时间 - clientTime - svrLogicTime
+  uint32 svrLogicTime = 2; //服务器逻辑延时
+}
+
+// 修改角色信息，只能在进入场景之后使用
+// csChangeRoleReq
+message CSMsgChangeRoleReq
+{
+  // 角色名称  长度小于64字节
+  optional string strName = 1;
+  // 角色性别
+  optional GameObject.EnumGameObjectGender eGender = 2;
+  // 模型id
+  optional uint64 staticId = 3;
+  // 捏脸数据 模型ID
+  optional uint32 faceModeId = 4;
+  // 捏脸数据 小于10240字节
+  optional bytes faces = 5;
+  // 衣服 眼镜等 小于512
+  optional string equipment = 6;
+  // 玩家信息
+  GameObject.MsgGameObjectId msgPlayerId = 7;
+  // 风控参数
+  GameObject.MsgRisk msgRisk = 8;
+}
+
+// scChangeRoleRes
+message SCMsgChangeRoleRes
+{
+
+}
+
+// csChatTokenReq
+message CSMsgChatTokenReq
+{
+  // 鉴权版本号 长度不大于4字节
+  string strVersion = 1 [deprecated = true];
+  // 房间名 长度不大于64字节
+  string roomName = 2 [deprecated = true];
+  // 用户ID 长度不大于64字节
+  string uid = 3 [deprecated = true];
+  // 预期超时时间，单位秒，如果为0，则默认24小时
+  uint32 expectTs = 4 [deprecated = true];
+}
+
+// scChatTokenRes
+message SCMsgChatTokenRes
+{
+  message MsgBackgroundInfo {
+    // 进入背景音房间时rtc需要的token
+    string chatToken = 1;
+    // 背景音房间名
+    string roomName = 2;
+    // 音视频后台通过 LevelFromSpace 计算得来，背景音房间需要
+    uint32 spaceLevel = 3;
+    // 音视频后台通过 LevelFromSpace 计算得来，背景音房间需要
+    uint32 cellLevel = 4;
+  }
+
+  // 进入普通房间时RTC需要的token
+  string chatToken = 1;
+  // 普通房间名
+  string roomName = 2;
+  // 背景音相关的数据
+  MsgBackgroundInfo msgBackgroundInfo = 3;
+}
+
+// csOBSChatTokenReq
+message CSMsgOBSChatTokenReq
+{
+  // 直播的房间名
+  string roomName = 1;
+}
+
+// scOBSChatTokenRes
+message SCMsgOBSChatTokenRes
+{
+  // 进入直播房间时rtc需要的token
+  string chatToken = 1;
+}
+
+// 请求用户的脸部数据
+// csPlayerFacesReq
+message CSMsgPlayerFacesReq
+{
+  option deprecated = true;
+  // 玩家信息
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+}
+
+// scPlayerFacesRes
+message SCMsgPlayerFacesRes
+{
+  option deprecated = true;
+  // 玩家信息
+  GameObject.MsgGameObjectId msgPlayerId = 1;
+  // 捏脸信息
+  bytes faces = 2;
+  // 捏脸版本号信息
+  uint32 facesVersion = 3;
+}
+
+// 角色名检测
+// csUerNameCheckReq
+message CSUerNameCheckReq
+{
+  string strName = 1;
+}
+
+message SCUerNameCheckRes
+{
+
+}
+
+// csChatForbidReq
+message CSChatForbidReq
+{
+  option deprecated = true;
+  string strForbidSrc = 1; //禁言原因
+}
+
+// scChatForbidRes
+message SCChatForbidRes
+{
+  option deprecated = true;
+  uint32 forbidCnt = 1;     //禁言次数
+  uint32 unForbidTime = 2;  //可以说话时间单位秒
+}
+
+// scChatForbidUpd
+message SCMsgChatForbidUpd
+{
+  int64 startTime = 1; // 开始禁言时间
+  int64 overTime = 2; // 结束禁言时间
+  string reason = 3; // 禁言原因
+}
+
+// 暂不支持
+// csUpdateCionReq
+message CSUpdateCionReq
+{
+  option deprecated = true;
+}
+
+// scUpdateCionRes
+message SCUpdateCionRes
+{
+  option deprecated = true;
+}
+
+//////////////////////////////// 排队服务 ////////////////////////////////////
+
+// csVerifyQueueTokenReq
+message CSMsgVerifyQueueTokenReq
+{
+  string strQueueToken = 1;     // 从排队服务器获取的token
+  uint32 nCliType = 2;          // 客户端类型
+}
+
+// scVerifyQueueTokenRes
+message SCMsgVerifyQueueTokenRes
+{
+  uint64 nSessionID = 1;
+}
+
+// scChangeSessionIDUpd
+message SCMsgChangeSessionIDUpd
+{
+  uint64 nSessionID = 1;
+}
+
+// csReConnectReq
+message CSMsgReConnectReq
+{
+  uint64 nSessionID = 1;
+}
+
+// scReConnectRes
+message SCMsgReConnectRes
+{
+
+}
+
+// csVerifyLoginTokenReq
+message CSMsgVerifyLoginTokenReq
+{
+  string strLoginToken = 1;     // 从登录服务器获取的token
+}
+
+// scVerifyLoginTokenRes
+message SCMsgVerifyLoginTokenRes
+{
+  uint32 nLeftUsrBefore = 1;    // 排在前面的人数
+}
+
+// scLeftUsrCountUpd
+message SCMsgLeftUsrCountUpd
+{
+  uint32 nLeftUsrBefore = 1;    // 排在前面的人数
+}
+
+// scConnectToProxySrvUpd
+message SCMsgConnectToProxySrvUpd
+{
+  repeated string arrProxyAddress = 1;     // proxy服务的地址
+  string strQueueToken = 2;       // 连接到proxysrv后需要验证的token
+}
+
+//////////////////////////////////////////////// 社交好友系统 ////////////////////////////////////////////////
+
+// 好友信息
+/*******************************************************/
+// 说明：1个好友的详细信息
+//  nRoleID - 好友的角色ID
+//  strUserName - 好友的角色名
+//  strHeadIcon - 好友的头顶图标
+//  strNote - 好友的备注
+//  bIsOnline - 好友当前是否在线
+//  nAgreeTimeStamp - 此好友通过的unix时间戳
+/*******************************************************/
+message MsgFriendInfo
+{
+  enum EnumFriendStatus
+  {
+    None = 0; // 正常状态
+    Delete = 1; // 好友已注销账号
+    BadData = 2; // 加载好友数据失败，比如角色名，头像，在线状态失败等
+  }
+  uint64 nRoleID = 1;
+  string strUserName = 2;
+  string strHeadIcon = 3 [deprecated = true];
+  string strNote = 4;
+  bool bIsOnline = 5;
+  uint64 nAgreeTimeStamp = 6; // 通过申请的时间
+  EnumFriendStatus nStatus = 7; // 好友数据状态
+  uint64 nUserid = 8;
+  GameObject.EnumGameObjectGender eGender = 9; // 好友性别
+  uint32 facesVersion = 10; // 捏脸版本号信息
+  string faceToken = 11; // 捏脸拉取token
+}
+
+// 好友列表
+/*******************************************************/
+// 说明：所有的好友列表
+//  arrFriends - 好友信息的数组
+/*******************************************************/
+message MsgFriendList
+{
+  repeated MsgFriendInfo arrFriends = 1;
+}
+
+// 好友申请信息
+/*******************************************************/
+// 说明：好友申请的详细信息
+//  nRoleID - 申请者的角色ID
+//  strUserName - 申请者的角色名
+//  strHeadIcon - 申请者的头顶图标
+//  nUnixStamp - 申请发起的unix时间戳
+/*******************************************************/
+message MsgFriendApplyInfo
+{
+  uint64 nRoleID = 1;
+  string strUserName = 2;
+  string strHeadIcon = 3 [deprecated = true];
+  uint64 nUnixStamp = 4;      // 申请的时间
+  uint64 nUserid = 5;
+  GameObject.EnumGameObjectGender eGender = 6; // 申请性别
+}
+
+// 申请列表
+/*******************************************************/
+// 说明：好友申请的列表
+//  arrApplys - 所有申请数组
+/*******************************************************/
+message MsgFriendApplyList
+{
+  repeated MsgFriendApplyInfo arrApplys = 1;
+}
+
+// csFriendListReq
+/*******************************************************/
+// 说明：由客户端发起，请求好友列表
+/*******************************************************/
+message CSMsgFriendListReq
+{
+
+}
+
+// scFriendListRes
+/*******************************************************/
+// 说明：服务器返回的好友列表
+//  msgList - 返回的好友列表
+/*******************************************************/
+message SCMsgFriendListRes
+{
+  MsgFriendList msgList = 1;
+}
+
+// csFriendApplyListReq
+/*******************************************************/
+// 说明：由客户端发起，请求好友申请列表
+/*******************************************************/
+message CSMsgFriendApplyListReq
+{
+
+}
+
+// scFriendApplyListRes
+/*******************************************************/
+// 说明：服务器返回的申请列表
+//  msgList - 返回的申请列表
+/*******************************************************/
+message SCMsgFriendApplyListRes
+{
+  MsgFriendApplyList msgList = 1;
+}
+
+// csFriendApplyReq
+/*******************************************************/
+// 说明：由客户端发起，向一个角色申请添加好友
+//  nDstRoleID - 被申请角色的ID
+/*******************************************************/
+message CSMsgFriendApplyReq
+{
+  uint64 nDstRoleID = 1;
+  GameObject.MsgRisk msgRisk = 2; // 风控参数
+}
+
+// scFriendApplyRes
+/*******************************************************/
+// 说明：服务器返回的申请结果
+/*******************************************************/
+message SCMsgFriendApplyRes
+{
+
+}
+
+// csFriendApplyReplyReq
+/*******************************************************/
+// 说明：被申请者客户端发起，处理一个好友申请
+//  nApplyRoleID - 发起申请角色的ID
+//  bAccept - 是否同意此申请
+/*******************************************************/
+message CSMsgFriendApplyReplyReq
+{
+  uint64 nApplyRoleID = 1;    // 申请人ID
+  bool   bAccept = 2;
+  GameObject.MsgRisk msgRisk = 3; // 风控参数
+}
+
+// scFriendApplyReplyRes
+/*******************************************************/
+// 说明：CSMsgFriendApplyReplyReq的返回包
+/*******************************************************/
+message SCMsgFriendApplyReplyRes
+{
+
+}
+
+// csFriendDeleteReq
+/*******************************************************/
+// 说明：删除一个好友
+//  nFriendRoleID - 要删除好友的角色ID
+/*******************************************************/
+message CSMsgFriendDeleteReq
+{
+  uint64 nFriendRoleID = 1;
+  GameObject.MsgRisk msgRisk = 2; // 风控参数
+}
+
+// scFriendDeleteRes
+/*******************************************************/
+// 说明：删除结果
+//  nFriendRoleID - 如果删除成功，则返回被删除的好友角色ID
+/*******************************************************/
+message SCMsgFriendDeleteRes
+{
+  uint64 nFriendRoleID = 1;
+}
+
+// scFriendApplyListChangeUpd
+/*******************************************************/
+// 说明：通知客户端，其好友申请列表发生了变化（有人申请他或申请被处理好）
+/*******************************************************/
+message SCMsgFriendApplyListChangeUpd
+{
+
+}
+
+// scFriendListChangeUpd
+/*******************************************************/
+// 说明：通知客户端，其好友列表发生了变化
+/*******************************************************/
+message SCMsgFriendListChangeUpd
+{
+
+}
+
+// csFriendSetNoteReq
+/*******************************************************/
+// 说明：设置一个好友的备注
+//  nFriendRoleID - 要设置备注的好友角色ID
+//  strNote - 设置的备注
+/*******************************************************/
+message CSMsgFriendSetNoteReq
+{
+  uint64 nFriendRoleID = 1;
+  string strNote = 2;
+}
+
+// scFriendSetNoteRes
+/*******************************************************/
+// 说明：设置一个好友的备注的返回包
+//  nFriendRoleID - 要设置备注的好友角色ID
+//  strNote - 设置的备注
+/*******************************************************/
+message SCMsgFriendSetNoteRes
+{
+  uint64 nFriendRoleID = 1;
+  string strNote = 2;
+}
+
+// csQueryUserReq
+/*******************************************************/
+// 说明：按一定规则查找特定的角色，优先级如下
+//  nRoleID - 如果此值不为0，则进行角色ID精确查找
+//  nAppealId - 如果此值不为0，则进行希壤号精确查找
+//  nBDUserId - 如果此值不为0，则进行百度passport用户ID精确查找
+//  strFuzzyName - 模糊角色名查找
+/*******************************************************/
+message CSMsgQueryUserReq
+{
+  uint64 nRoleID = 1;       // 要查询的用户ID
+  string strFuzzyName = 2;  // 或者要查询的模糊用户名
+  uint64 nAppealId = 3;     // 要查询的希壤号
+  uint64 nBDUserId = 4;     // 要查询的百度passport用户id
+}
+
+// scQueryUserRes
+/*******************************************************/
+// 说明：查找到的角色信息
+/*******************************************************/
+message MsgQueryUserInfo
+{
+  uint64 nRoleID = 1; // 角色ID
+  string strName = 2; // 角色名
+  string strHeadIcon = 3 [deprecated = true]; // 改使用帐号ID来拉取用户头像
+  uint64 nUserid = 4; // 帐号ID
+  uint64 nAppealId = 5; // 希壤号
+  uint64 nBDUserId = 6; // 百度passport用户id
+  GameObject.EnumGameObjectGender eGender = 7; // 性别
+}
+
+/*******************************************************/
+// 说明：查找角色返回包
+//  arrInfos - 查找到的角色数组
+/*******************************************************/
+message SCMsgQueryUserRes
+{
+  repeated MsgQueryUserInfo arrInfos = 1;
+}
+
+// 申请状态
+/*******************************************************/
+// 说明：好友申请可能处于的状态
+/*******************************************************/
+enum EnumApplyStatus
+{
+  UnknownApplyStatus = 0;
+  ApplyTodo = 1; //待处理
+  ApplyOverdue = 2; //已过期
+  ApplyRefuse = 3; //已拒绝
+  ApplyAccept = 4; //已同意
+  ApplyAutoAccept = 5; // 已自动同意
+}
+
+// 好友申请记录信息
+/*******************************************************/
+// 说明：好友申请记录信息
+//  nRoleID - 申请者的ID
+//  strUserName - 申请者的角色名
+//  strHeadIcon - 申请者的头顶图标
+//  nUnixStamp - 申请的时间戳
+//  msgStatus - 申请的最终状态
+/*******************************************************/
+message MsgFriendApplyHistoryInfo
+{
+  uint64 nRoleID = 1;
+  string strUserName = 2;
+  string strHeadIcon = 3 [deprecated = true];
+  uint64 nUnixStamp = 4;      // 申请的时间
+  EnumApplyStatus msgStatus = 5;
+  uint64 nUserid = 6;
+  GameObject.EnumGameObjectGender eGender = 7; // 好友性别
+}
+
+// csFriendApplyHistoryListReq
+/*******************************************************/
+// 说明：请求好友申请历史记录
+/*******************************************************/
+message CSMsgFriendApplyHistoryListReq
+{
+
+}
+
+// scFriendApplyHistoryListRes
+/*******************************************************/
+// 说明：返回的好友申请记录
+//  msgList - 历史记录数组
+/*******************************************************/
+message SCMsgFriendApplyHistoryListRes
+{
+  repeated MsgFriendApplyHistoryInfo msgList = 1;
+}
+
+// scNotifyMsgUpd
+message SCMsgNotifyMsgUpd
+{
+  enum EnumMsgType
+  {
+    MsgTypeNone = 0;
+    MsgTypeServer = 1; // 全服通知
+    MsgTypeSpace = 2; // 空间通知
+    MsgTypeArea = 3; // 区域通知
+    MsgTypeRole = 4; // 个人通知
+  }
+  EnumMsgType type = 1;
+  string message = 2;
+  uint64 wordId = 3; // 这个需要客户端和服务器维护统一的word表
+}
+
+
+// csIntimacyPrepareReq
+message CSMsgIntimacyPrepareReq
+{
+  GameObject.MsgGameObjectId msgDstObjID = 1;
+  string strActName = 2;
+}
+
+// scIntimacyPrepareRes
+message SCMsgIntimacyPrepareRes
+{
+}
+
+// csIntimacyDoReq
+message CSMsgIntimacyDoReq
+{
+  GameObject.MsgGameObjectId msgDstObjID = 1;
+  string strActName = 2;
+}
+
+// scIntimacyDoRes
+message SCMsgIntimacyDoRes
+{
+}
+
+// csPhoneCallReq
+message CSMsgPhoneCallReq
+{
+  repeated GameObject.MsgGameObjectId msgDstObjID = 1; // 要呼叫的用户，可支持多人语音
+  GameObject.MsgRisk msgRisk = 2; // 风控参数
+}
+
+// scPhoneCallRes
+message SCMsgPhoneCallRes
+{
+  string roomName = 1;
+  string chatToken = 2;
+}
+
+// scPhoneCallUpd
+message SCMsgPhoneCallUpd
+{
+  GameObject.MsgGameObjectId msgSrcObjID = 1;
+}
+
+// csPhoneAnswerReq
+message CSMsgPhoneAnswerReq
+{
+  GameObject.MsgGameObjectId msgSrcObjID = 1;
+  bool bAccept = 2;
+  GameObject.MsgRisk msgRisk = 3; // 风控参数
+  EnumPhoneAnswer enumAnswer = 4; // 应答状态
+}
+
+// scPhoneAnswerRes
+message SCMsgPhoneAnswerRes
+{
+  string roomName = 1;
+  string chatToken = 2;
+}
+
+// 接电话应答状态
+enum EnumPhoneAnswer
+{
+  EnumPhoneAnswer_None = 0;
+
+  EnumPhoneAnswer_Accept = 1; // 主动接听
+  EnumPhoneAnswer_Refuse = 2; // 主动拒听
+  EnumPhoneAnswer_TimeoutRefuse = 3; // 超时拒听
+  EnumPhoneAnswer_OnCalling = 4; // 有电话在拨打中(还未接通)
+}
+
+// scPhoneAnswerUpd
+message SCMsgPhoneAnswerUpd
+{
+  GameObject.MsgGameObjectId msgDstObjID = 1;
+  EnumPhoneAnswer enumAnswer = 2;
+}
+
+// csPhoneHungUpReq
+message CSMsgPhoneHungUpReq
+{
+  GameObject.MsgRisk msgRisk = 1; // 风控参数
+}
+
+// scPhoneHungUpRes
+message SCMsgPhoneHungUpRes
+{
+}
+
+// scPhoneHungUpUpd
+message SCMsgPhoneHungUpUpd
+{
+  GameObject.MsgGameObjectId msgHungUpObjID = 1;
+  string roomName = 2;
+}
+
+// csPhoneAbortReq
+message CSMsgPhoneAbortReq
+{
+  GameObject.MsgRisk msgRisk = 1; // 风控参数
+}
+
+// scPhoneAbortRes
+message SCMsgPhoneAbortRes
+{
+}
+
+// scPhoneAbortUpd
+message SCMsgPhoneAbortUpd
+{
+  string roomName = 1;
+  GameObject.MsgGameObjectId msgAbortUpObjID = 2;
+}
+
+// scIntimacyPrepareUpd
+message SCMsgIntimacyPrepareUpd
+{
+  GameObject.MsgGameObjectId msgDstObjID = 1;
+  string strActName = 2;
+}
+
+// scIntimacyDoUpd
+message SCMsgIntimacyDoUpd
+{
+  GameObject.MsgGameObjectId msgDstObjID = 1;
+  string strActName = 2;
+  GameObject.MsgGameObjectId msgSrcObjID = 3;
+}
+
+// scFriendApplyResponseUpd
+message SCMsgFriendApplyResponseUpd
+{
+  uint64 nApplyRoleID = 1;
+  bool bAccept = 2;
+}
+
+// scAreaUpd
+message SCMsgAreaUpd
+{
+  GameObject.MsgArea msgEnterArea = 1;
+  GameObject.MsgArea msgUpdArea = 2;
+  optional uint64 msgLeaveArea = 3;
+}
+
+// csUsePackItemReq
+message CSMsgUsePackItemReq
+{
+  uint64 nId = 1;
+}
+
+// scUsePackItemRes
+message SCMsgUsePackItemRes
+{
+
+}
+//csPackItemDelNewReq;
+message CSMsgPackItemDelNewReq
+{
+  repeated uint64 msgItems = 1; //查看过的物品的
+}
+//scPackItemDelNewRes;
+message SCMsgPackItemDelNewRes
+{
+}
+
+// scMassiveNearbyUpd
+message SCMsgMassiveNearbyUpd
+{
+  message MsgMassiveNearbyItem
+  {
+    optional uint32 nSitNO = 1;             //座位号 用座位号时就不用msgObjID与msgObjPos了
+    GameObject.MsgGameObjectId msgObjID = 2;//对象ID
+    GameObject.MsgVarVector3 msgObjPos = 3; //位置信息
+    optional uint32 nStatusFlag1 = 4;       //对象当前的状态 每bit位表示一个状态，最多支持32个状态，服务器会发送对象的全部状态
+    optional uint32 nActionFlag1 = 5;       //对象发起的动作 每bit位表示一个动作，最多支持32个动作，服务器会发送对象新发起的动作
+  }
+
+  uint64 nAreaID = 1;                             // 引起同屏的区域ID
+  repeated MsgMassiveNearbyItem arrAddItems = 2;  // 新增的对象
+  repeated MsgMassiveNearbyItem arrChgItems = 3;  // 修改的对象
+  repeated MsgMassiveNearbyItem arrDelItems = 4;  // 删除的对象
+}
+
+// 任务操作
+enum EnumTaskOp
+{
+  EnumTaskOp_None = 0;
+  EnumTaskOp_Accept = 1; // 接取
+  EnumTaskOp_Commit = 2; // 提交
+  EnumTaskOp_DelNew = 3; // 删除new标记
+}
+
+// csTaskOpReq
+message CSMsgTaskOpReq
+{
+  uint64 nTaskID = 1;
+  EnumTaskOp nOp = 2;
+  GameObject.MsgRisk msgRisk = 3; // 风控使用 风控参数
+}
+
+// scTaskOpRes
+message SCMsgTaskOpRes
+{
+}
+
+// csTaskEventCaseReq
+message CSMsgTaskEventCaseReq
+{
+  string event_case = 1;  //  任务条件接口名 如ShareCount
+  uint64 param1 = 2;       // 参数
+  uint64 param2 = 3;       // 参数
+  uint64 param3 = 4;       // 参数
+}
+
+// ssChgPlayerItemRes
+message SCMsgTaskEventCaseRes
+{
+}
+
+// scRoleOnOrOffLineUpd
+message SCMsgRoleOnOrOffLineUpd
+{
+  repeated uint64 arr_online_roleid = 1;
+  repeated uint64 arr_offline_roleid = 2;
+}
+
+// scChgRoleNameNotifyUpd
+message SCMsgChgRoleNameNotifyUpd
+{
+  message MsgRoleInfo {
+    uint64 roleid = 1;
+    string new_role_name = 2;
+  }
+  repeated MsgRoleInfo arr_infos = 1;
+}
+
+// scItemChangeUpd
+message SCMsgItemChangeUpd
+{
+  uint64 item_id = 1;
+  int32 change_num = 2;
+  uint32 reason = 3; // 物品提示相关
+}
+
+// 角色自身信息改变，通知给客户端
+// scSelfChangeUpd
+message SCMsgSelfChangeUpd
+{
+  GameObject.MsgPlayer player = 1;
+}
+
+// scClearNearbyUpd
+message SCMsgClearNearbyUpd
+{
+}
+
+// scSpaceChangeUpd
+message SCMsgSpaceChangeUpd
+{
+  GameObject.MsgWorldSpace msgWorldSpace = 1;
+}
+
+// scNearbyHotUpd
+// 每个层级独立全量下发，如果没有人，服务器会下发一个空的包
+// 图例 5*5
+// |-wide-|
+// ____________________________________
+// |  9   |  24  |  23  |  22  |  21  |
+// |  10  |   1  |   8  |   7  |  20  |
+// |  11  |   2  |   0  |   6  |  19  |
+// |  12  |   3  |   4  |   5  |  18  |
+// |  13  |  14  |  15  |  16  |  17  |
+// ____________________________________
+// |-              range             -|
+message SCMsgNearbyHotUpd
+{
+  uint32 nLevel = 1;                    // 层级
+  uint32 nAreaWide = 2;                 // 区域的宽度
+  sint32 nXIdx = 3;                     // 上图0号格子的X索引值
+  sint32 nZIdx = 4;                     // 上图0号格子的Z索引值
+  repeated uint32 arrAreaObjCount = 5;  // 区域列表
+  uint32 nOvertimeMS = 6;               // 这些数据多长时间后过期
+}
+
+// csSetRoleConfigReq
+message CSMsgSetRoleConfigReq
+{
+  uint64 id = 1;
+  string key = 2;
+  string val = 3;
+}
+
+// scSetRoleConfigRes
+message SCMsgSetRoleConfigRes
+{
+}
+
+// 消息类型
+enum EnumMessageType
+{
+  EnumMessageType_None = 0;
+  EnumMessageType_Channel = 1;  // 频道消息
+  EnumMessageType_Private = 2;  // 私密消息
+}
+
+// 消息发送者类型
+enum EnumMessageFromType
+{
+  EnumMessageFromType_None = 0;
+  EnumMessageFromType_User = 1;     // 用户消息
+  EnumMessageFromType_Custom = 2;   // 自定义消息类型
+}
+
+// 消息内容类型
+enum EnumMessageContentType
+{
+  EnumMessageContentType_None = 0;
+  EnumMessageContentType_Text = 1;    // 文本
+  EnumMessageContentType_Voice = 2;   // 语音
+  EnumMessageContentType_RTF = 3;     // 复文本
+}
+
+message ChatMessage
+{
+  uint64 id = 1;                            // 消息ID，非必须字段
+  EnumMessageType type = 2;                 // 消息类型
+  EnumMessageFromType fromType= 3;          // 消息发送者类型
+  uint64 fromId = 4;                        // 消息发送者ID
+  uint64 fromRoleId = 5;                    // 消息发送者角色ID
+  string fromRoleName = 6;                  // 消息发送者角色名称
+  string fromCustom = 7;                    // 自定义消息发送者
+  uint64 toUserId = 8;                      // 个人接收者ID
+  uint64 toUserRoleId = 9;                  // 个人接收者角色ID
+  string toUserRoleName = 10;               // 个人接收者角色名称
+  string toChannelId = 11;                  // 频道ID
+  EnumMessageContentType contentType = 12;  // 消息内容类型
+  string simpleText = 13;                   // 文本消息内容
+  string richText = 14;                     // 富文本消息内容
+  uint64 timestamp = 15;                    // timestamp 毫秒
+  bool read = 16;                           // 已阅标识
+}
+
+// csPushChatMessageReq,客户端推送聊天消息到服务端
+message CSMsgPushChatMessageReq
+{
+  repeated ChatMessage messages = 1;        // 消息
+  GameObject.MsgRisk msgRisk = 2;           // 风控参数
+  string extendedData = 3;                  // 扩展字段
+}
+
+// scPushChatMessageRes, 客户端推送聊天消息到服务端
+message SCMsgPushChatMessageRes
+{
+  bool isSensitive = 1;         // 是否含有敏感词
+  string extendedData = 2;      // 扩展字段
+}
+
+// scPushChatMessageUpd, 服务端推送聊天消息到客户端
+message SCMsgPushChatMessageUpd
+{
+  repeated ChatMessage messages = 1;        //  消息
+  string extendedData = 2;                  // 扩展字段
+}
+
+// csPushReadReceiptReq, 推送读回执
+message CSMsgPushReadReceiptReq
+{
+  uint64 senderId = 1;                            // 消息发送者
+  uint64 senderRoleId = 2;                        // 消息发送者角色
+  EnumMessageContentType contentType = 3;         // 消息类型
+  uint64 deadline = 4;                            // timestamp 毫秒，此时间之前所有指定消息置为已阅
+  string extendedData = 5;                        // 扩展字段
+}
+
+// scPushReadReceiptRes, 推送读回执
+message SCMsgPushReadReceiptRes
+{
+  string extendedData = 1;            // 扩展字段
+}
+
+// csPushReadReceiptListReq, 推送读回执列表
+message CSMsgPushReadReceiptListReq
+{
+  uint64 senderId = 1;                            // 消息发送者
+  uint64 senderRoleId = 2;                        // 消息发送者角色
+  repeated uint64 messageId = 3;                  // 消息ID集合
+  string extendedData = 4;                        // 扩展字段
+}
+
+// scPushReadReceiptListRes, 推送读回执
+message SCMsgPushReadReceiptListRes
+{
+  string extendedData = 1;            // 扩展字段
+}
+
+// 进入/离开频道类型
+enum EnumChannelActionType
+{
+  EnumChannelActionType_None = 0;
+  EnumChannelActionType_Leave = 1;  // 离开
+  EnumChannelActionType_Enter = 2;  // 进入
+}
+
+// scPushLeaveEnterChannelUpd, 推送离开/进去频道消息到客户端
+message SCMsgPushLeaveEnterChannelUpd
+{
+  ChannelBaseInfo channel = 1;              // 频道信息
+  EnumChannelActionType action = 2;         // 动作
+  uint64 timeStamp = 3;                     // 发生时间, time stamp 毫秒
+  string extendedData = 4;                  // 扩展字段
+}
+
+// scPushMessageTokenUpd, 推送用户访问消息系统专有Token, 该Token推送时机为用户登陆希壤后的动作
+message SCMsgPushMessageTokenUpd
+{
+  uint64 userId = 1;              // 用户ID
+  uint64 userRoleId = 2;          // 用户角色ID
+  string token = 3;               // Token
+  string address = 4;           // Address
+  string extendedData = 5;        // 扩展字段
+}
+
+message ChannelBaseInfo
+{
+  string channelId = 1;             //  频道ID, 由 Message Server 产生
+  string name = 2;                  //  频道名字，不允许更改名字
+  string channelType = 3;           // 频道类型
+  string specificType = 4;          // 具体的频道类型
+  uint32 topNumber = 5;             // 置顶编号, 每个用户不同,0: 代表不置顶,数字越大，排序越靠前，这条信息存储在每个用户的置顶列表
+  string extendedData = 6;          // 扩展字段
+}
+
+message Channel
+{
+  ChannelBaseInfo baseInfo = 1;     // 频道基本信息
+  bool persistentOpen = 2;          // 是否持久化
+  bool allowClientMsg = 3;          // 允许发消息
+  bool pushByWorldServer = 4;       // 是否由 World Server 下发该频道消息，默认 false
+  string extendedData = 5;          // 扩展字段
+}
+
+// csPullChannelListReq , 返回结果根据用户置顶信息排序（待定）
+message CSMsgPullChannelListReq
+{
+  string channelType = 1;           // 获取特定类型频道列表, 空 代表全部
+  string extendedData = 2;          // 扩展字段
+}
+
+// scPullChannelListRes
+message SCMsgPullChannelListRes
+{
+  repeated ChannelBaseInfo channels = 1;    // 频道列表
+  string extendedData = 2;                  // 扩展字段
+}
+
+// csPullPrivateChatReq
+message CSMsgPullPrivateChatReq
+{
+  string extendedData = 1;      // 扩展字段
+}
+
+// scPullPrivateChatRes
+message SCMsgPullPrivateChatRes
+{
+  repeated ChatMessage messages = 1;        // 消息
+  string extendedData = 2;                  // 扩展字段
+}
+
+// csCreateUserTokenReq
+message CSMsgCreateUserTokenReq
+{
+  string extendedData = 1;      // 扩展字段
+}
+
+// scCreateUserTokenRes
+message SCMsgCreateUserTokenRes
+{
+  string token = 1;             // Token
+  string address = 2;           // Address
+  string extendedData = 3;      // 扩展字段
+}
+
+// csSetTopChannelReq, 置顶频道,返回置顶频道列表，如果超过上限就返回错误码即可
+message CSMsgSetTopChannelReq
+{
+  string channelId = 1;         // 频道ID
+  string extendedData = 2;      // 扩展字段
+}
+
+// scSetTopChannelRes, 置顶频道,返回置顶频道列表
+message SCMsgSetTopChannelRes
+{
+  repeated ChannelBaseInfo channels = 1;  // 频道列表
+  string extendedData = 2;                // 扩展字段
+}
+
+// csUnsetTopChannelReq, 取消置顶频道
+message CSMsgUnsetTopChannelReq
+{
+  string channelId = 1;         // 频道ID
+  string extendedData = 2;      // 扩展字段
+}
+
+// scUnsetTopChannelRes, 取消置顶频道
+message SCMsgUnsetTopChannelRes
+{
+  string extendedData = 2;              // 扩展字段
+}
+
+// csQueryTopChannelReq, 查询置顶频道
+message CSMsgQueryTopChannelReq
+{
+  string extendedData = 1;      // 扩展字段
+}
+
+// scQueryTopChannelRes, 查询置顶频道
+message SCMsgQueryTopChannelRes
+{
+  repeated ChannelBaseInfo channels = 1;  // 频道列表
+  string extendedData = 2;                // 扩展字段
+}
+
+// csLeaveChannelReq
+message CSMsgLeaveChannelReq
+{
+  string channelId = 1;         // 频道ID
+  string extendedData = 2;      // 扩展字段
+}
+
+// scLeaveChannelRes
+message SCMsgLeaveChannelRes
+{
+  string channelId = 1;         // 频道ID
+  string extendedData = 2;      // 扩展字段
+}
+
+// csMessageLoginReq
+message CSMsgMessageLoginReq
+{
+  uint64 userId = 1;                  // 用户ID
+  uint64 userRoleId = 2;              // 用户角色ID
+  string token = 3;                   // token 内容
+  uint32 cliType = 4;                 // 客户端类型，客户端单独使用，解释权归客户端所有
+  string strHardware = 5;             // 长度小于128 客户端硬件ID 唯一
+  string strVersion = 6;              // 长度小于64字节 客户端版本号 版本校验使用
+  uint32 versionCliType = 7;          // 机型 版本校验使用
+  uint32 versionChannelType = 8;      // 渠道 版本校验使用
+  string extendedData = 9;            // 扩展字段
+}
+
+// scMessageLoginRes
+message SCMsgMessageLoginRes
+{
+  uint64 userId = 1;                  // 用户ID
+  uint64 userRoleId = 2;              // 用户角色ID
+  string extendedData = 3;            // 扩展字段
+}
+
+// csPushChatMessageContentReq, 推送消息内容（音频、视频、图片等）至消息服务器专有数据通道
+message CSMsgPushChatMessageContentReq
+{
+  EnumMessageContentType contentType = 1;         // 消息类型
+  bytes content = 2;                              // 消息内容
+  GameObject.MsgRisk msgRisk = 3;                 // 风控参数
+  string extendedData = 4;                        // 扩展字段
+}
+
+// scPushChatMessageContentRes, 推送消息内容（音频、视频、图片等）至消息服务器专有数据通道
+message SCMsgPushChatMessageContentRes
+{
+  string url = 1;                         // 内容访问地址
+  string algorithm = 2;                   // 对称加密算法
+  string secret = 3;                      // 密钥
+  string extendedData = 4;                // 扩展字段
+}

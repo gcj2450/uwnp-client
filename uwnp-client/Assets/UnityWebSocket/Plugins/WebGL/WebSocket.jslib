@@ -1,4 +1,4 @@
-var WebSocketLibrary =
+﻿var WebSocketLibrary =
 {
     $webSocketManager:
     {

@@ -1,0 +1,630 @@
+syntax = "proto3";
+
+package Z.GameObject;
+option go_package = "/";
+
+import "google/protobuf/any.proto";
+
+////////////////////////////////////////////////////////////////////////////////
+// 游戏对象脚本变量定义
+////////////////////////////////////////////////////////////////////////////////
+
+enum EnumVarType
+{
+  None = 0;
+  Number = 1;
+  Boolean = 2;
+  String = 3;
+  Float = 4;
+  Table = 5;
+  Pair = 6;
+  Vector3 = 7;
+}
+
+message MsgVarBoolean
+{
+  bool bVal = 1;
+}
+
+message MsgVarNumber
+{
+  int64 i64Val = 1;
+}
+
+message MsgVarString
+{
+  bytes strVal = 1;
+}
+
+message MsgVarFloat
+{
+  double fVal = 1;
+}
+
+message MsgVarPair
+{
+  MsgVarAny anyKey = 1;
+  MsgVarAny anyVal = 2;
+}
+
+message MsgVarTable
+{
+  // 0: 增量更新（arrAddOrUpdVar和arrDelVarKeys）
+  // 1: 全量更新（arrAllVar）
+  bool bForceAll = 1;
+  // 所有变量，全部同步时使用
+  repeated MsgVarPair arrAllVar = 2;
+  // 删除的变量，增量更新时使用
+  repeated MsgVarAny arrDelVarKeys = 3;
+}
+
+message MsgVarVector3
+{
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message MsgVarRect
+{
+  float left = 1;
+  float right = 2;
+  float top = 3;
+  float bottom = 4;
+}
+
+message MsgVarAny
+{
+  EnumVarType eType = 1;
+  google.protobuf.Any anyVal = 2 [deprecated = true];
+  bytes byVal = 3;
+}
+
+message MsgVarObj
+{
+  optional bool bToOwnerClient = 1;
+  optional bool bToOtherClient = 2;
+  optional bool bToDb = 3;
+  MsgVarAny anyVar = 4;
+}
+
+message MsgVarPool
+{
+  // 0: 新增或更新过的变量，增量更新时使用
+  // 1: 全部变量，全部更新时使用
+  bool bForceAll = 1;
+  map<string, MsgVarObj> mapAllVars = 2;
+  // 删除的变量，增量更新时使用
+  repeated string arrDelVars = 3;
+}
+
+/////////////////////////////////////////////////// cache scriptvar cache定义 ///////////////////////////////////////////////////
+message MsgCacheVarBoolean
+{
+  bool bVal = 1;
+}
+
+message MsgCacheVarNumber
+{
+  int64 i64Val = 1;
+}
+
+message MsgCacheVarString
+{
+  string strVal = 1;
+}
+
+message MsgCacheVarFloat
+{
+  double fVal = 1;
+}
+
+message MsgCacheVarPair
+{
+  MsgCacheVarAny anyKey = 1;
+  MsgCacheVarAny anyVal = 2;
+}
+
+message MsgCacheVarTable
+{
+  // 0: 增量更新（arrAddOrUpdVar和arrDelVarKeys）
+  // 1: 全量更新（arrAllVar）
+  bool bForceAll = 1;
+  // 所有变量，全部同步时使用
+  repeated MsgCacheVarPair arrAllVar = 2;
+  // 删除的变量，增量更新时使用
+  repeated MsgCacheVarAny arrDelVarKeys = 3;
+}
+
+message MsgCacheVarVector3
+{
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message MsgCacheVarRect
+{
+  float left = 1;
+  float right = 2;
+  float top = 3;
+  float bottom = 4;
+}
+
+message MsgCacheVarAny
+{
+  GameObject.EnumVarType eType = 1;
+  MsgCacheVarBoolean msgBoolean = 2;
+  MsgCacheVarNumber msgNumber = 3;
+  MsgCacheVarString msgString = 4;
+  MsgCacheVarFloat msgFloat = 5;
+  MsgCacheVarPair msgPair = 6;
+  MsgCacheVarTable msgTable = 7;
+}
+
+message MsgCacheVarObj
+{
+  optional bool bToOwnerClient = 1;
+  optional bool bToOtherClient = 2;
+  optional bool bToDb = 3;
+  MsgCacheVarAny anyVar = 4;
+}
+
+message MsgCacheVarPool
+{
+  // 变量所属的对像
+  GameObject.MsgGameObjectId MsgObjID = 1;
+  // 0: 新增或更新过的变量，增量更新时使用
+  // 1: 全部变量，全部更新时使用
+  bool bForceAll = 2;
+  map<string, MsgCacheVarObj> mapAllVars = 3;
+  // 删除的变量，增量更新时使用
+  repeated string arrDelVars = 4;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// 游戏对象定义
+////////////////////////////////////////////////////////////////////////////////
+
+// 对象类型
+enum EnumGameObjectType
+{
+  Unknown = 0;
+  Item = 0x100; // 地面物品
+  Player = 0x201; // 玩家
+  User = 0x202;   // 帐号
+  Npc = 0x210; // NPC
+  World = 0x1000; // 世界
+  WorldSpace = 0x1001; // 世界空间
+  Area = 0x1002; // 区域
+  Copy = 0x1003; // 副本
+}
+
+// 对象ID
+message MsgGameObjectId
+{
+  // 对象ID
+  uint64 nId = 1;
+  // 对象类型
+  EnumGameObjectType eType = 2;
+}
+
+// 对象性别
+enum EnumGameObjectGender
+{
+  Male = 0;
+  Female = 1;
+}
+
+// 所有游戏对象的基类
+message MsgGameObjectBase
+{
+  // 对象实例ID，唯一标识此对象
+  MsgGameObjectId instanceId = 1;
+  // 对象名字
+  optional string strName = 2;
+  // 脚本变量
+  MsgVarPool varPool = 3;
+  MsgCacheVarPool varCachePool = 4;         // 向cache服务传输数据时打包到这里，类型为MsgCacheVarPool
+  // 增量版本号，包括原版本号和增量后版本号
+  optional uint32 nIncSrcVersion = 5;
+  optional uint32 nIncDstVersion = 6;
+}
+
+message MsgPosDir
+{
+  MsgVarVector3 msgPosition = 1;
+  MsgVarVector3 msgDirection = 2;
+}
+
+enum EnumBodyPart
+{
+  UnknownBodyPart = 0;
+  LeftHand = 1;
+  RightHand = 2;
+  Helmet = 3;
+}
+
+message MsgBodyPartPosDir
+{
+  EnumBodyPart bodypart = 1;
+  MsgPosDir msgPosDir = 2;
+}
+
+// 地图上的游戏对象基类（包含道具,NPC,玩家等可放置在地图上的对象）
+message MsgGameMapObject
+{
+  MsgGameObjectBase msgObject = 1;
+  MsgPosDir msgPosDir = 2;
+  repeated MsgBodyPartPosDir msgSubPosDirs = 3;
+  MsgGameObjectId msgWorldId = 4; // 世界ID
+  MsgGameObjectId msgSpaceId = 5; // 空间ID
+  MsgGameObjectId msgCopyId = 6; // 副本ID
+}
+
+message MsgClientFunction
+{
+  
+  string strName = 1;     // 交互用的key
+  string strDesc = 2;     // 展示给用户看的字段
+  string strType = 3;     // trans传送功能 collect采集功能
+  string strTriggerType = 4; // client_cmd 用交互命令返回用户的选择 #client_cmd strName
+  string strTriggerParam = 5; // 触发参数 time,begintime,endtime 时间限制
+  string strAction = 6; // 动作类型 collect
+  string strActionParam = 7;  // 动作参数
+  string strParam = 8;        // 功能参数 "463856467969 0 0 0"
+  string strWhiteList = 9;    // 白名单 "希壤号1,希壤号2,..."
+}
+
+// 角色对象
+message MsgChar
+{
+  MsgGameMapObject msgMapObj = 1;
+  EnumGameObjectGender eGender = 2;
+  optional uint64 staticId = 3;
+  repeated MsgClientFunction msgClientFunctions = 4;
+  optional bool bVoiceMix = 5; // 是否进入背景音rtc房间
+  bool bHasClientFunctions = 6; // 服务端使用
+}
+
+// 玩家对象
+message MsgPlayer
+{
+  MsgChar msgChar = 1;
+  optional uint32 cliType = 2;
+  // 捏脸数据 模型ID
+  optional uint32 faceModeId = 3;
+  // 衣服 眼镜等 小于256
+  optional string equipment = 4;
+  // 捏脸版本号信息
+  optional uint32 facesVersion = 5;
+  // 帐号ID
+  optional uint64 nUserID = 6;
+  // 代币
+  map<uint64, MsgCurrency> mapCurrency = 7;
+  // 背包物品
+  MsgPackItems msgPackItems = 8;
+  // 头像URL地址
+  optional string strHeadIcon = 9 [deprecated = true];
+  // 希壤号
+  optional uint64 nAppealNO = 10;
+  // 座位号
+  optional uint64 nSitNO = 11;
+  //任务
+  MsgTask msgTask = 12;
+  // 百度passport用户id
+  optional uint64 bd_userid = 13;
+  // 创建时间
+  optional int64 create_time = 14;
+  // 登录时间
+  optional int64 login_time = 15;
+  // 登出时间
+  optional int64 logout_time = 16;
+  // 活动
+  MsgTaskActivity msgTaskActivity = 17;
+  // 装备信息
+  MsgEquips msgEquips = 18;
+  // 捏脸拉取token
+  optional string faceToken = 19;
+  // 角色配置信息
+  MsgRoleConfigs msgRoleConfigs = 20;
+}
+
+// NPC对象
+message MsgNpc
+{
+  MsgChar msgChar = 1;
+  MsgGameObjectId ownerId = 2;
+  optional uint64 refresId = 3;
+}
+
+// 地面物品对象
+message MsgGroundItem
+{
+  MsgGameMapObject msgMapObj = 1;
+}
+
+// 对地图对象的封装
+message MsgAnyMapObject
+{
+  // 以下对象只有一个会进行打包
+  MsgPlayer msgPlayer = 1;
+  MsgNpc msgNpc = 2;
+  MsgGroundItem msgGroundItem = 3;
+}
+
+// 世界对象
+message MsgWorld
+{
+  MsgGameObjectBase msgObject = 1;
+}
+
+// 空间对象
+message MsgWorldSpace
+{
+  // 空间对象信息
+  MsgGameObjectBase msgObject = 1;
+  // 所属世界的ID
+  MsgGameObjectId msgWorldId = 2;
+  // 副本ID
+  uint64 nCopyId = 3;
+}
+
+message MsgUserProxyInfo
+{
+  uint64 proxyId = 1; // 所属代理
+  uint64 connId = 2; // 连接id
+  uint64 userId = 3; // 用户id
+}
+
+// 用户vip等级
+enum EnumUserVip
+{
+  UnknownVip = 0;
+  AnonymousVip = 1;
+  NormalVip = 2;
+}
+
+// 用户渠道
+enum EnumUserChannel
+{
+  RobotChannel = 0;
+  AnonymousChannel = 1;
+  BaiduPassportChannel = 2;
+  OthersChannel = 255;
+}
+
+// 用户端类型
+enum EnumAppEndpoint
+{
+  UnknownEndpoint = 0;
+  iOS = 1;
+  VR = 2;
+  Android = 3;
+  Windows = 4;
+  MacOS = 5;
+}
+
+enum EnumAppChanneliOS
+{
+  UnknowniOSChannel = 0;
+  AppleAppstore = 1;
+  AppleBaiduDeveloper = 2; // 开发者版本
+  AppleBaiduAuditor = 3; // 审核员版本
+}
+
+enum EnumAppChannelVR
+{
+  UnknownVRChannel = 0;
+  PicoAppStore = 1;
+  PicoBaiduScene = 2; // 只有现场有，功能与应用商店版不同
+  PicoRehearse = 3; // 排练版本
+  PicoFengTang = 4; // 冯唐版本
+  PicoBaiduDeveloper = 5; // 开发者版本
+  PicoBaiduAuditor = 6; // 审核员版本
+}
+
+enum EnumAppChannelAndroid
+{
+  UnknownAndroidChannel = 0;
+  BaiduAppstore = 1; // 百度手机应用助手
+  BDVROfficial = 2; // 百度VR官网扫码下载
+  HuaweiAppstore = 3; // 华为应用商店
+  XiaomiAppstore = 4; // 小米应用商店
+  OPPOAppstore = 5; // OPPO手机应用商店
+  VIVOAppstore = 6; // VIVO应用商店
+  TencentAppstore = 7; // 腾讯应用宝
+  AliAppstore = 8; // 阿里应用分发平台
+  BaiduScene = 9; // 只有现场有，功能与应用商店版不同
+  CloudPhone = 10; // 云手机不支持拍照和相册，需要砍掉
+  Rehearse = 11; // 排练版本
+  CloudPhoneRehearse = 12; // 云手机排练版本
+  BaiduDeveloper = 13; // 开发者版本
+  BaiduAuditor = 14; // 审核员版本
+}
+
+enum EnumChgCurrencyReason
+{
+  UnknownEnumChgCurrency = 0;
+  EnumChgCurrencyCollect = 1;
+}
+
+message MsgCurrency
+{
+  uint64 nId = 1;           // 货币Id
+  uint64 nNum = 2;          // 当前数量
+  optional string strName = 3;         // 代币名称
+  optional string strDes = 4;          // 代币描述
+  optional string strResourceDir = 5;  // 代币资源路径
+  optional string strResourceName = 6;  // 代币资源名称
+}
+
+enum ItemTimeLimitType
+{
+  ItemTimeLimitType_No = 0; // 不限时
+  ItemTimeLimitType_Time = 1; // 固定时间点过期
+  ItemTimeLimitType_Get = 2; // 获得后开始计时
+  ItemTimeLimitType_Use = 3; // 使用后开始计时
+};
+
+enum ItemStatus
+{
+  ItemStatus_Normal = 0;  // 普通的
+  ItemStatus_Equip = 1;   // 装备中
+  ItemStatus_Used = 2;   // 使用过 比如门票使用参加过会场
+}
+
+message MsgPackItem
+{
+  uint64 nStaticId = 1;       // 物品静态Id
+  uint64 nId = 2;             // 物品实例ID
+  uint64 nNum = 3;            // 当前数量
+  uint64 nPos = 4;            // 背包内位置     // 废弃
+  bool nNew = 5;              // 是否查阅过
+  optional int64 nAssetId = 6 [deprecated = true]; // NFT资产id     // 废弃
+  optional int64 nShardId = 7 [deprecated = true]; // NFT资产碎片id // 废弃
+  optional string strAssetId = 8 [deprecated = true]; // NFT NFT资产id 是代表的NFT商品ID，在链上的 废弃
+  optional uint64 nExpireTime = 9; // 过期时间点
+  optional ItemStatus nStatus = 10; // 装备状态
+  optional string strGrantId = 11; // NFT 是用户购买到商品
+  optional string strGoodsId = 12 [deprecated = true]; // NFT 获取商品信息的 废弃
+}
+
+message MsgPackItems
+{
+  map<uint64, MsgPackItem> mapPackItems = 1;
+  repeated uint64 arrDelItems = 2;        //删除物品 实例ID
+}
+
+message MsgEquip
+{
+  uint64 nStaticId = 1;       // 物品静态Id
+}
+
+message MsgEquips
+{
+  map<uint64, MsgEquip> mapEquips = 1;
+  repeated uint64 arrDelEquips = 2;  //删除时使用
+}
+
+message MsgArea
+{
+  uint64 nAreaId = 1;
+  MsgVarPool msgVarPool = 2;
+}
+
+// 风控参数
+message MsgRisk
+{
+  string strZid = 1; // 安全SDK唯一标识ID
+  string strImei = 2; // 设备IMEI
+  string strIdfa = 3; // iOS设备标识idfa
+  string strIdfv = 4; // iOS设备标识idfv
+  string strMac = 5; // Android设备mac地址
+  string strPassuid = 6; // passuid
+  string strApp = 7; // APP类型，iOS/Android/universe
+  string strAppVer = 8; // APP版本号，如9.1
+  string strVerCode = 9; // APP数字版本号，Android必选
+  string strIp = 10; // 客户端IP
+  string strCuid = 11; // 百度设备标识CUID
+  string strAnid = 12; // Android的Android ID
+  string strMf = 13; // 设备制造商
+  string strModel = 14; // 设备型号
+  string strBrand = 15; // 设备品牌
+  string strRoleName = 16; // 希壤用户角色名称
+  string strPosition = 17; // 用户当前坐标，格式为x_y_z
+  string strAppID = 18; // 占位，暂时不用填
+}
+
+// 任务时效类型
+enum EnumTaskAgingType
+{
+  EnumTaskAgingType_Forever = 0; // 永久任务
+  EnumTaskAgingType_Daily = 1; // 每日任务
+  EnumTaskAgingType_Weekly = 2; // 每周任务
+}
+
+enum EnumTaskType
+{
+  EnumTaskType_Inform = 0; // 见闻
+  EnumTaskType_Entrust = 1; // 委托
+  EnumTaskType_Achieve = 2; // 成就
+  EnumTaskType_Activity = 3; // 活动
+}
+
+enum EnumTaskStatus
+{
+  EnumTaskStatus_None = 0;
+  EnumTaskStatus_Doing = 1;      // 进行中
+  EnumTaskStatus_Committing = 2; // 完成未提交
+  EnumTaskStatus_Done = 3;       // 完成且提交
+  EnumTaskStatus_Frozen = 4;     // 任务冻结中
+}
+
+enum EnumTaskActivityStatus
+{
+  EnumTaskActivityStatus_None = 0;
+  EnumTaskActivityStatus_Doing = 1; // 活动进行中
+  EnumTaskActivityStatus_Done = 2; // 活动已完成
+  EnumTaskActivityStatus_Frozen = 3; // 活动冻结中
+  EnumTaskActivityStatus_Del = 4; // 活动已下架，静态数据找不到
+  EnumTaskActivityStatus_NotStarted = 5; // 活动未开始
+  EnumTaskActivityStatus_Expire = 6; // 活动已过期
+}
+
+// 活动类型
+enum EnumTaskActivityType
+{
+  EnumTaskActivityType_Forever = 0; // 永久活动
+  EnumTaskActivityType_Timed = 1; // 限时活动
+  EnumTaskActivityType_Daily = 2; // 每日活动
+  EnumTaskActivityType_Weekly = 3; // 每周活动
+}
+
+message MsgTaskDoing
+{
+  uint64 nTaskId = 1;
+  EnumTaskStatus nTaskStatus = 2;        //任务状态
+  map<uint32, uint32> mapConditions = 3; //完成任务条件的进度
+  optional bool bNew = 4;                //new标记
+  uint64 activity_id = 5;                // 活动id，非活动是0
+  int64 create_time = 6;                 // 创建时间
+  int64 update_time = 7;                 // 更新时间
+}
+
+message MsgTask
+{
+  repeated MsgTaskDoing arrMsgTaskDoings = 1;   //进行中任务
+  map<uint64, int64> mapTaskFrozens = 2;       //冻结中任务 <非永久性任务ID，可接取时间>
+  repeated uint64 arrMsgTaskDones = 3;          //已完成的永久性任务
+  repeated uint64 arrMsgTaskDels = 4;           //删除的任务 进行中任务减少任务时使用
+}
+
+message MsgTaskActivityDoing
+{
+  uint64 id = 1; // 活动id
+  int64 create_time = 2; // 创建时间
+  bool is_new = 3; // new标记
+  map<uint32, uint32> map_conditions = 4; // 完成活动条件的进度，主要用于奖励等
+  map<uint32, bool> map_rewards = 5; // 领奖情况
+}
+
+message MsgTaskActivity
+{
+  repeated MsgTaskActivityDoing arr_activity_doing = 1; // 当前正在进行中的活动
+  repeated uint64 arr_activity_del = 2; // 已下架删除的活动
+  map<uint64, int64> arr_activity_frozen = 3; // 已冻结的活动，周期活动使用 <活动id，下次可接取时间>
+}
+
+message MsgRoleConfig
+{
+  uint64 id = 1; // 配置id
+  string key = 2; // 配置key
+  string val = 3; // 配置val
+}
+
+message MsgRoleConfigs
+{
+  repeated MsgRoleConfig mapConfigs = 1; // 角色当前的配置
+  repeated uint64 arrDelConfigs = 2; // 已下架的配置
+}
